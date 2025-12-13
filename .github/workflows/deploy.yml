@@ -1,0 +1,104 @@
+name: deploy
+on:
+  push:
+    branches:
+      - main
+env:
+  DOMAIN: ofertascaique.cloud
+  DEPLOY_DIR: /var/www/paineis-tv
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Build frontend
+        run: |
+          cd sistema-paineis-tv
+          npm ci
+          printf "NODE_ENV=production\nVITE_API_URL=http://$DOMAIN/api\nVITE_BACKEND_URL=http://$DOMAIN\nVITE_BUILD_MODE=production\nVITE_ENABLE_SOURCEMAP=false\n" > .env.production
+          npm run build:prod
+          mkdir -p ../artifacts/frontend
+          cp -r dist/* ../artifacts/frontend/
+      - name: Prepare backend package
+        run: |
+          mkdir -p artifacts/BACKEND
+          rsync -a --delete --exclude 'instance/paineltv.db' --exclude '__pycache__' --exclude '.venv' BACKEND/ artifacts/BACKEND/
+      - name: Upload files
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          port: ${{ secrets.DEPLOY_PORT }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          source: "artifacts/*"
+          target: "~/deploy"
+      - name: Remote deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          port: ${{ secrets.DEPLOY_PORT }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+            PROJECT_DIR="${{ env.DEPLOY_DIR }}"
+            BACKEND_DIR="$PROJECT_DIR/BACKEND"
+            FRONT_DIR="$PROJECT_DIR/frontend"
+            mkdir -p "$PROJECT_DIR"
+            rsync -a --delete ~/deploy/BACKEND/ "$BACKEND_DIR/"
+            rsync -a --delete ~/deploy/frontend/ "$FRONT_DIR/"
+            python3 -m venv "$BACKEND_DIR/venv" || true
+            "$BACKEND_DIR/venv/bin/pip" install --upgrade pip
+            "$BACKEND_DIR/venv/bin/pip" install -r "$BACKEND_DIR/requirements.txt"
+            "$BACKEND_DIR/venv/bin/pip" install gunicorn
+            cat >/etc/nginx/sites-available/paineis-tv <<NGINX
+            server {
+                listen 80;
+                server_name ${DOMAIN} www.${DOMAIN};
+                root ${DEPLOY_DIR}/frontend;
+                index index.html;
+                location / { try_files \$uri \$uri/ /index.html; }
+                location /api {
+                    proxy_pass http://127.0.0.1:5000;
+                    proxy_http_version 1.1;
+                    proxy_set_header Host \$host;
+                    proxy_set_header X-Real-IP \$remote_addr;
+                    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                    proxy_set_header X-Forwarded-Proto \$scheme;
+                    proxy_connect_timeout 60s;
+                    proxy_send_timeout 60s;
+                    proxy_read_timeout 60s;
+                }
+            }
+            NGINX
+            ln -sf /etc/nginx/sites-available/paineis-tv /etc/nginx/sites-enabled/paineis-tv
+            rm -f /etc/nginx/sites-enabled/default || true
+            cat >/etc/systemd/system/paineltv-backend.service <<SERVICE
+            [Unit]
+            Description=Paineis TV Backend
+            After=network.target
+            [Service]
+            User=www-data
+            Group=www-data
+            WorkingDirectory=${DEPLOY_DIR}/BACKEND
+            Environment=FLASK_ENV=production
+            Environment=PYTHONUNBUFFERED=1
+            Environment=TOLEDO_WATCH_PATH=/dev/null
+            Environment=TOLEDO_WATCH_INTERVAL_MIN=60
+            ExecStart=${DEPLOY_DIR}/BACKEND/venv/bin/gunicorn -w 3 -b 127.0.0.1:5000 app:app
+            Restart=always
+            RestartSec=5
+            [Install]
+            WantedBy=multi-user.target
+            SERVICE
+            systemctl daemon-reload
+            systemctl enable paineltv-backend || true
+            systemctl restart paineltv-backend
+            nginx -t
+            systemctl reload nginx

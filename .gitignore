@@ -1,0 +1,13 @@
+BACKEND/.venv/
+BACKEND/__pycache__/
+BACKEND/instance/paineltv.db
+BACKEND/uploads/
+
+sistema-paineis-tv/node_modules/
+sistema-paineis-tv/dist/
+sistema-paineis-tv/playwright-report/
+sistema-paineis-tv/test-results/
+sistema-paineis-tv/health-reports/
+
+.DS_Store
+Thumbs.db

@@ -1,0 +1,16 @@
+{
+  "produtos": [
+    {
+      "nome": "Produto Import Teste 1",
+      "preco": "25,99",
+      "posicao": 1,
+      "ativo": true
+    },
+    {
+      "nome": "Produto Import Teste 2", 
+      "preco": "35,50",
+      "posicao": 2,
+      "ativo": true
+    }
+  ]
+}

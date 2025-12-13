@@ -1,0 +1,9 @@
+{
+  "produtos": [
+    {
+      "nome": "TESTE PRODUTO",
+      "preco": "25,99",
+      "ativo": true
+    }
+  ]
+}
