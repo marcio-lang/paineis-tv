@@ -23,6 +23,7 @@ jobs:
           host: ${{ secrets.SSH_HOST || secrets.DEPLOY_HOST }}
           username: ${{ secrets.SSH_USER || secrets.DEPLOY_USER }}
           key: ${{ secrets.SSH_KEY || secrets.DEPLOY_SSH_KEY }}
+          password: ${{ secrets.SSH_PASSWORD || secrets.DEPLOY_PASSWORD }}
           port: ${{ secrets.SSH_PORT || secrets.DEPLOY_PORT }}
           script_stop: true
           script: |
@@ -37,6 +38,7 @@ jobs:
               export GIT_SSH_COMMAND="ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes"
             fi
             REPO_SSH="git@github.com:${{ github.repository }}.git"
+            GH_PAT="${{ secrets.GH_PAT || secrets.DEPLOY_GH_PAT }}"
             BRANCH="${{ github.event.inputs.branch || 'main' }}"
             DEST="${{ secrets.SERVER_PATH || vars.SERVER_PATH || secrets.DEPLOY_PATH || vars.DEPLOY_PATH }}"
             if [ -z "$DEST" ]; then DEST="/var/www/paineis-tv"; fi
@@ -44,10 +46,18 @@ jobs:
             if [ ! -d "$DEST/.git" ]; then
               cd "$DEST"
               if [ -f .git/config ]; then rm -rf .git; fi
-              git clone "$REPO_SSH" .
+              if [ -n "$GH_PAT" ] && [ ! -f ~/.ssh/deploy_key ]; then
+                git clone "https://$GH_PAT@github.com/${{ github.repository }}.git" .
+              else
+                git clone "$REPO_SSH" .
+              fi
             else
               cd "$DEST"
-              git fetch --all --prune
+              if [ -n "$GH_PAT" ] && [ ! -f ~/.ssh/deploy_key ]; then
+                git fetch --all --prune
+              else
+                git fetch --all --prune
+              fi
               git checkout -f "$BRANCH"
               git reset --hard "origin/$BRANCH"
             fi
