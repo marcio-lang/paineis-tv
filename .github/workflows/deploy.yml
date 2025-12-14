@@ -1,11 +1,20 @@
 name: Deploy to Hostinger VPS
 on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch para deploy
+        required: false
+        default: main
   push:
     branches:
       - main
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-${{ github.ref }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
       - name: Deploy via git pull
@@ -28,6 +37,7 @@ jobs:
               export GIT_SSH_COMMAND="ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes"
             fi
             REPO_SSH="git@github.com:${{ github.repository }}.git"
+            BRANCH="${{ github.event.inputs.branch || 'main' }}"
             DEST="${{ secrets.SERVER_PATH }}"
             mkdir -p "$DEST"
             if [ ! -d "$DEST/.git" ]; then
@@ -37,8 +47,8 @@ jobs:
             else
               cd "$DEST"
               git fetch --all --prune
-              git checkout -f main
-              git reset --hard origin/main
+              git checkout -f "$BRANCH"
+              git reset --hard "origin/$BRANCH"
             fi
             if [ -f scripts/post-deploy.sh ]; then chmod +x scripts/post-deploy.sh; bash scripts/post-deploy.sh; fi
             if [ -f scripts/server-tuning.sh ]; then chmod +x scripts/server-tuning.sh; UPLOAD_MAX="${{ secrets.UPLOAD_MAX }}" bash scripts/server-tuning.sh; fi
