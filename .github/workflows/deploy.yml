@@ -1,90 +1,44 @@
-name: Deploy para VPS
-
+name: Deploy to Hostinger VPS
 on:
   push:
     branches:
       - main
-  workflow_dispatch:
-
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Deploy via git pull
+        uses: appleboy/ssh-action@v1.0.0
         with:
-          node-version: '20'
-
-      - name: Criar .env.production
-        working-directory: sistema-paineis-tv
-        run: |
-          echo "NODE_ENV=production" > .env.production
-          echo "VITE_API_URL=${{ vars.FRONTEND_API_URL }}" >> .env.production
-          echo "VITE_BACKEND_URL=${{ vars.FRONTEND_BACKEND_URL }}" >> .env.production
-          echo "VITE_BUILD_MODE=production" >> .env.production
-          echo "VITE_ENABLE_SOURCEMAP=false" >> .env.production
-
-      - name: Build frontend
-        working-directory: sistema-paineis-tv
-        run: |
-          npm install
-          npm run build:prod
-
-      - name: Empacotar frontend
-        run: |
-          tar -czf frontend-dist.tar.gz -C sistema-paineis-tv dist
-
-      - name: Empacotar backend
-        run: |
-          tar -czf backend.tar.gz BACKEND --exclude='BACKEND/.venv' --exclude='BACKEND/__pycache__' --exclude='BACKEND/uploads' --exclude='BACKEND/instance/*.db'
-
-      - name: Publicar artefatos
-        uses: actions/upload-artifact@v4
-        with:
-          name: deploy-artifacts
-          path: |
-            backend.tar.gz
-            frontend-dist.tar.gz
-
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: Baixar artefatos
-        uses: actions/download-artifact@v4
-        with:
-          name: deploy-artifacts
-
-      - name: Enviar arquivos para VPS
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          source: "backend.tar.gz,frontend-dist.tar.gz"
-          target: "~/deploy"
-
-      - name: Executar deploy remoto
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script_stop: true
           script: |
             set -e
-            mkdir -p ~/deploy
-            cd ~/deploy
-            tar -xzf backend.tar.gz
-            tar -xzf frontend-dist.tar.gz
-
-            sudo mkdir -p /var/www/paineis-tv/BACKEND
-            sudo mkdir -p /var/www/paineis-tv/frontend
-
-            sudo rsync -a --delete --exclude 'venv/' --exclude '__pycache__/' --exclude 'uploads/' --exclude 'instance/' ~/deploy/BACKEND/ /var/www/paineis-tv/BACKEND/
-            sudo rsync -a --delete ~/deploy/dist/ /var/www/paineis-tv/frontend/
-
-            sudo systemctl restart paineltv-backend
-            sudo systemctl reload nginx
-            curl -s http://localhost:5000/api/health || true
+            mkdir -p ~/.ssh
+            if [ -n "${{ secrets.REPO_DEPLOY_KEY }}" ]; then
+              echo "${{ secrets.REPO_DEPLOY_KEY }}" > ~/.ssh/deploy_key
+              chmod 600 ~/.ssh/deploy_key
+            fi
+            ssh-keyscan -H github.com >> ~/.ssh/known_hosts
+            if [ -f ~/.ssh/deploy_key ]; then
+              export GIT_SSH_COMMAND="ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes"
+            fi
+            REPO_SSH="git@github.com:${{ github.repository }}.git"
+            DEST="${{ secrets.SERVER_PATH }}"
+            mkdir -p "$DEST"
+            if [ ! -d "$DEST/.git" ]; then
+              cd "$DEST"
+              if [ -f .git/config ]; then rm -rf .git; fi
+              git clone "$REPO_SSH" .
+            else
+              cd "$DEST"
+              git fetch --all --prune
+              git checkout -f main
+              git reset --hard origin/main
+            fi
+            if [ -f scripts/post-deploy.sh ]; then chmod +x scripts/post-deploy.sh; bash scripts/post-deploy.sh; fi
+            if [ -f scripts/server-tuning.sh ]; then chmod +x scripts/server-tuning.sh; UPLOAD_MAX="${{ secrets.UPLOAD_MAX }}" bash scripts/server-tuning.sh; fi
