@@ -189,13 +189,13 @@ export const ActionsPage: React.FC = () => {
       
       // Upload das imagens se houver
       if (createImages.length > 0) {
-        for (const image of createImages) {
-          const errs = actionService.validateImageFile(image);
-          if (errs.length > 0) {
-            errs.forEach(e => toast.error(e));
-            continue;
-          }
-          await actionService.uploadActionImage(newAction.id, image);
+        const invalids = createImages
+          .map(img => ({ img, errs: actionService.validateImageFile(img) }))
+          .filter(x => x.errs.length > 0);
+        if (invalids.length > 0) {
+          invalids.forEach(x => x.errs.forEach(e => toast.error(e)));
+        } else {
+          await actionService.uploadActionImages(newAction.id, createImages);
         }
       }
       

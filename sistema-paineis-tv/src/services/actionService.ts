@@ -94,6 +94,15 @@ class ActionService {
     return response;
   }
 
+  async uploadActionImages(actionId: string, files: File[]): Promise<{ uploaded_files: ActionImage[] } | null> {
+    const formData = new FormData();
+    for (const file of files) {
+      formData.append('images', file);
+    }
+    const response = await api.upload(`/actions/${actionId}/images`, formData);
+    return response as any;
+  }
+
   async deleteActionImage(actionId: string, imageId: string): Promise<void> {
     await api.delete(`/actions/${actionId}/images/${imageId}`);
   }

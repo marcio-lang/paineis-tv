@@ -18,7 +18,7 @@ After=network.target
 Type=simple
 WorkingDirectory=$ROOT/BACKEND
 Environment=PYTHONUNBUFFERED=1
-ExecStart=$ROOT/BACKEND/.venv/bin/gunicorn -w 3 -b 127.0.0.1:5000 app:app
+ExecStart=$ROOT/BACKEND/.venv/bin/gunicorn -w 3 -b 127.0.0.1:5000 --timeout 300 --graceful-timeout 300 --worker-class gthread --threads 4 app:app
 Restart=always
 User=www-data
 [Install]
