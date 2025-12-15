@@ -1,5 +1,5 @@
 set -e
-MAX="${UPLOAD_MAX:-50M}"
+MAX="${UPLOAD_MAX:-100M}"
 if command -v nginx >/dev/null 2>&1; then
   CONF="/etc/nginx/conf.d/00_client_max_body_size.conf"
   LINE="client_max_body_size $MAX;"
@@ -15,7 +15,7 @@ if command -v nginx >/dev/null 2>&1; then
 fi
 if command -v apache2ctl >/dev/null 2>&1; then
   CONF="/etc/apache2/conf-available/upload-limit.conf"
-  SIZE_BYTES="52428800"
+  SIZE_BYTES="104857600"
   CONTENT="LimitRequestBody $SIZE_BYTES"
   if command -v sudo >/dev/null 2>&1; then
     echo "$CONTENT" | sudo tee "$CONF" >/dev/null

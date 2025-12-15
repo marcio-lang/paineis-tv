@@ -1,0 +1,36 @@
+name: Server Tuning Only
+on:
+  workflow_dispatch:
+    inputs:
+      upload_max:
+        description: Max upload size (e.g., 100M)
+        required: false
+        default: 100M
+jobs:
+  tune:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Apply upload limits
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST || secrets.DEPLOY_HOST }}
+          username: ${{ secrets.SSH_USER || secrets.DEPLOY_USER }}
+          password: ${{ secrets.SSH_PASSWORD || secrets.DEPLOY_PASSWORD }}
+          key: ${{ secrets.SSH_KEY || secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.SSH_PORT || secrets.DEPLOY_PORT }}
+          script_stop: true
+          script: |
+            set -e
+            MAX="${{ github.event.inputs.upload_max }}"
+            if [ -z "$MAX" ]; then MAX="${{ secrets.UPLOAD_MAX || vars.UPLOAD_MAX }}"; fi
+            if [ -z "$MAX" ]; then MAX="100M"; fi
+            mkdir -p /etc/nginx/conf.d
+            if command -v sudo >/dev/null 2>&1; then
+              echo "client_max_body_size $MAX;" | sudo tee /etc/nginx/conf.d/00_client_max_body_size.conf >/dev/null
+              sudo nginx -t
+              sudo systemctl reload nginx || sudo service nginx reload || true
+            else
+              echo "client_max_body_size $MAX;" > /etc/nginx/conf.d/00_client_max_body_size.conf
+              nginx -t
+              systemctl reload nginx || service nginx reload || true
+            fi
