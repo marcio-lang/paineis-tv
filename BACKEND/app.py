@@ -375,7 +375,7 @@ def allowed_file(filename):
 
 def get_file_type(filename):
     ext = filename.rsplit('.', 1)[1].lower()
-    if ext in ['png', 'jpg', 'jpeg']:
+    if ext in ['png', 'jpg', 'jpeg', 'webp', 'gif']:
         return 'image'
     elif ext == 'mp4':
         return 'video'
@@ -1025,7 +1025,11 @@ def upload_action_images(action_id):
             unique_filename = f"{uuid.uuid4()}_{filename}"
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
             
-            file.save(file_path)
+            try:
+                file.save(file_path)
+            except Exception as e:
+                print(f"[UPLOAD] Erro ao salvar arquivo {filename}: {str(e)}")
+                return jsonify({'error': 'Erro ao salvar arquivo', 'details': str(e)}), 500
             
             action_image = ActionImage(
                 filename=unique_filename,

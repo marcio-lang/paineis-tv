@@ -4,7 +4,9 @@ if command -v nginx >/dev/null 2>&1; then
   CONF="/etc/nginx/conf.d/00_upload_tuning.conf"
   CONTENT="client_max_body_size $MAX;
 client_body_timeout 300s;
-proxy_request_buffering off;
+client_body_buffer_size 64M;
+proxy_http_version 1.1;
+proxy_request_buffering on;
 proxy_read_timeout 300s;
 proxy_connect_timeout 60s;
 proxy_send_timeout 300s;"
