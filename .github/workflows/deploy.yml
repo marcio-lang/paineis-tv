@@ -58,6 +58,12 @@ jobs:
               fi
             else
               cd "$DEST"
+              if [ ! -f ~/.ssh/deploy_key ]; then
+                CURRENT_URL="$(git remote get-url origin || echo '')"
+                if echo "$CURRENT_URL" | grep -qE '^git@github\.com:'; then
+                  git remote set-url origin "https://github.com/${{ github.repository }}.git"
+                fi
+              fi
               git fetch --all --prune
               git checkout -f "$BRANCH"
               git reset --hard "origin/$BRANCH"
