@@ -3,6 +3,7 @@ from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.exceptions import RequestEntityTooLarge
 from functools import wraps
 import os
 from datetime import datetime, timedelta
@@ -37,7 +38,8 @@ app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(INSTANCE_DIR, 
 print(f"[INFO] Usando SQLite: {app.config['SQLALCHEMY_DATABASE_URI']}")
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'uploads')
-app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max file size
+max_mb = int(os.environ.get('MAX_UPLOAD_MB', os.environ.get('MAX_CONTENT_MB', '100')))
+app.config['MAX_CONTENT_LENGTH'] = max_mb * 1024 * 1024
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'jwt-secret-key-change-in-production')
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
@@ -53,6 +55,10 @@ BRAZIL_TZ = pytz.timezone('America/Sao_Paulo')
 def get_brazil_now():
     """Retorna o datetime atual no timezone do Brasil"""
     return datetime.now(BRAZIL_TZ)
+
+@app.errorhandler(RequestEntityTooLarge)
+def handle_file_too_large(e):
+    return jsonify({'error': 'Arquivo muito grande', 'max_size_mb': int(app.config['MAX_CONTENT_LENGTH'] / (1024 * 1024))}), 413
 
 # Modelos do banco de dados
 class Panel(db.Model):
@@ -362,7 +368,7 @@ def butcher_product_to_dict(self):
 ButcherProduct.to_dict = butcher_product_to_dict
 
 # Extensões permitidas
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'mp4'}
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'gif', 'mp4'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS

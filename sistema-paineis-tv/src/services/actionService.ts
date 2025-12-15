@@ -134,8 +134,8 @@ class ActionService {
 
   validateImageFile(file: File): string[] {
     const errors: string[] = [];
-    const allowedTypes = ['image/png', 'image/jpg', 'image/jpeg'];
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    const allowedTypes = ['image/png', 'image/jpg', 'image/jpeg', 'image/webp', 'image/gif'];
+    const maxSize = 100 * 1024 * 1024;
 
     if (!allowedTypes.includes(file.type)) {
       errors.push('Tipo de arquivo não permitido. Use PNG, JPG ou JPEG');

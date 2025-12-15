@@ -8,6 +8,12 @@ sistema-paineis-tv/dist/
 sistema-paineis-tv/playwright-report/
 sistema-paineis-tv/test-results/
 sistema-paineis-tv/health-reports/
+sistema-paineis-tv/.env
+sistema-paineis-tv/.env.local
+sistema-paineis-tv/.env.production
 
 .DS_Store
 Thumbs.db
+*.log
+*.zip
+*.tar.gz

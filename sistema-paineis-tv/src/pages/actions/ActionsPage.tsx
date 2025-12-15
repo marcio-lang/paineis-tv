@@ -8,6 +8,7 @@ import { Button } from '../../components/base/Button';
 import { ContainerLayout } from '../../components/layout/Layout';
 import { actionService, Action, CreateActionData, UpdateActionData, ActionImage } from '../../services/actionService';
 import { panelService, Panel } from '../../services/panelService';
+import { ApiError } from '../../services/api';
 
 export const ActionsPage: React.FC = () => {
   const [actions, setActions] = useState<Action[]>([]);
@@ -189,6 +190,11 @@ export const ActionsPage: React.FC = () => {
       // Upload das imagens se houver
       if (createImages.length > 0) {
         for (const image of createImages) {
+          const errs = actionService.validateImageFile(image);
+          if (errs.length > 0) {
+            errs.forEach(e => toast.error(e));
+            continue;
+          }
           await actionService.uploadActionImage(newAction.id, image);
         }
       }
@@ -268,7 +274,8 @@ export const ActionsPage: React.FC = () => {
       loadActionImages(selectedAction.id);
     } catch (error: any) {
       console.error('Erro ao enviar imagem:', error);
-      toast.error(error.response?.data?.error || 'Erro ao enviar imagem');
+      const message = error instanceof ApiError ? error.message : (error?.message || 'Erro ao enviar imagem');
+      toast.error(message);
     } finally {
       setUploadingImage(false);
     }
@@ -794,7 +801,7 @@ export const ActionsPage: React.FC = () => {
                     Clique para enviar imagem
                   </span>
                   <span className="mt-1 block text-sm text-gray-500">
-                    PNG, JPG ou JPEG até 10MB
+                    PNG, JPG ou JPEG até 100MB
                   </span>
                 </label>
                 <input

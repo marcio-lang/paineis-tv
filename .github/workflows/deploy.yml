@@ -17,6 +17,12 @@ jobs:
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
+      - name: Referências de Deploy
+        run: |
+          echo "## Documentos de Deploy" >> $GITHUB_STEP_SUMMARY
+          echo "- DEPLOY_GITHUB.md" >> $GITHUB_STEP_SUMMARY
+          echo "- DEPLOY_GUIDE.md" >> $GITHUB_STEP_SUMMARY
+          echo "- sistema-paineis-tv/DEPLOYMENT.md" >> $GITHUB_STEP_SUMMARY
       - name: Deploy via git pull
         uses: appleboy/ssh-action@v1.0.0
         with:

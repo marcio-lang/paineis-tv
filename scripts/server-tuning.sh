@@ -1,14 +1,19 @@
 set -e
 MAX="${UPLOAD_MAX:-100M}"
 if command -v nginx >/dev/null 2>&1; then
-  CONF="/etc/nginx/conf.d/00_client_max_body_size.conf"
-  LINE="client_max_body_size $MAX;"
+  CONF="/etc/nginx/conf.d/00_upload_tuning.conf"
+  CONTENT="client_max_body_size $MAX;
+client_body_timeout 300s;
+proxy_request_buffering off;
+proxy_read_timeout 300s;
+proxy_connect_timeout 60s;
+proxy_send_timeout 300s;"
   if command -v sudo >/dev/null 2>&1; then
-    echo "$LINE" | sudo tee "$CONF" >/dev/null
+    echo "$CONTENT" | sudo tee "$CONF" >/dev/null
     sudo nginx -t
     sudo systemctl reload nginx || sudo service nginx reload || true
   else
-    echo "$LINE" > "$CONF"
+    echo "$CONTENT" > "$CONF"
     nginx -t
     systemctl reload nginx || service nginx reload || true
   fi
