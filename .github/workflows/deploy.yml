@@ -26,8 +26,8 @@ jobs:
       - name: Deploy via git pull
         uses: appleboy/ssh-action@v1.0.0
         with:
-          host: ${{ secrets.SSH_HOST || secrets.DEPLOY_HOST }}
-          username: ${{ secrets.SSH_USER || secrets.DEPLOY_USER }}
+          host: 212.85.10.184
+          username: root
           key: ${{ secrets.SSH_KEY || secrets.DEPLOY_SSH_KEY }}
           passphrase: ${{ secrets.SSH_PASSPHRASE || secrets.DEPLOY_PASSPHRASE }}
           password: ${{ secrets.SSH_PASSWORD || secrets.DEPLOY_PASSWORD }}
