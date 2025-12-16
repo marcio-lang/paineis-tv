@@ -38,7 +38,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(INSTANCE_DIR, 
 print(f"[INFO] Usando SQLite: {app.config['SQLALCHEMY_DATABASE_URI']}")
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'uploads')
-max_mb = int(os.environ.get('MAX_UPLOAD_MB', os.environ.get('MAX_CONTENT_MB', '100')))
+max_mb = int(os.environ.get('MAX_UPLOAD_MB', os.environ.get('MAX_CONTENT_MB', '150')))
 app.config['MAX_CONTENT_LENGTH'] = max_mb * 1024 * 1024
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'jwt-secret-key-change-in-production')

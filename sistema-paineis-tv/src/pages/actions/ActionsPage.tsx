@@ -258,18 +258,20 @@ export const ActionsPage: React.FC = () => {
 
   // Upload de imagem
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!selectedAction || !event.target.files?.[0]) return;
+    if (!selectedAction || !event.target.files?.length) return;
 
-    const file = event.target.files[0];
-    const errors = actionService.validateImageFile(file);
-    if (errors.length > 0) {
-      errors.forEach(error => toast.error(error));
+    const files = Array.from(event.target.files);
+    const invalids = files
+      .map(f => ({ f, errs: actionService.validateImageFile(f) }))
+      .filter(x => x.errs.length > 0);
+    if (invalids.length > 0) {
+      invalids.forEach(x => x.errs.forEach(e => toast.error(e)));
       return;
     }
 
     try {
       setUploadingImage(true);
-      await actionService.uploadActionImage(selectedAction.id, file);
+      await actionService.uploadActionImages(selectedAction.id, files);
       toast.success('Imagem enviada com sucesso!');
       loadActionImages(selectedAction.id);
     } catch (error: any) {
@@ -801,7 +803,7 @@ export const ActionsPage: React.FC = () => {
                     Clique para enviar imagem
                   </span>
                   <span className="mt-1 block text-sm text-gray-500">
-                    PNG, JPG ou JPEG até 100MB
+                    PNG, JPG ou JPEG até 150MB
                   </span>
                 </label>
                 <input
@@ -809,6 +811,7 @@ export const ActionsPage: React.FC = () => {
                   type="file"
                   className="hidden"
                   accept="image/*"
+                  multiple
                   onChange={handleImageUpload}
                   disabled={uploadingImage}
                 />

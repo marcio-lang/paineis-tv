@@ -144,14 +144,14 @@ class ActionService {
   validateImageFile(file: File): string[] {
     const errors: string[] = [];
     const allowedTypes = ['image/png', 'image/jpg', 'image/jpeg', 'image/webp', 'image/gif'];
-    const maxSize = 100 * 1024 * 1024;
+    const maxSize = 150 * 1024 * 1024;
 
     if (!allowedTypes.includes(file.type)) {
       errors.push('Tipo de arquivo não permitido. Use PNG, JPG ou JPEG');
     }
 
     if (file.size > maxSize) {
-      errors.push('Arquivo muito grande. Máximo 10MB');
+      errors.push('Arquivo muito grande. Máximo 150MB');
     }
 
     return errors;
