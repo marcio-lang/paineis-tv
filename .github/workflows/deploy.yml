@@ -1,78 +1,52 @@
-name: Deploy to Hostinger VPS
+name: Deploy to VPS
 on:
   workflow_dispatch:
-    inputs:
-      branch:
-        description: Branch para deploy
-        required: false
-        default: main
   push:
     branches:
       - main
 jobs:
-  deploy:
+  build_frontend:
     runs-on: ubuntu-latest
-    concurrency:
-      group: deploy-${{ github.ref }}
-      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
-      - name: Referências de Deploy
-        run: |
-          echo "## Documentos de Deploy" >> $GITHUB_STEP_SUMMARY
-          echo "- DEPLOY_GITHUB.md" >> $GITHUB_STEP_SUMMARY
-          echo "- DEPLOY_GUIDE.md" >> $GITHUB_STEP_SUMMARY
-          echo "- sistema-paineis-tv/DEPLOYMENT.md" >> $GITHUB_STEP_SUMMARY
-      - name: Deploy via git pull
-        uses: appleboy/ssh-action@v1.0.0
+      - uses: actions/setup-node@v4
         with:
-          host: 212.85.10.184
-          username: root
-          key: ${{ secrets.SSH_KEY || secrets.DEPLOY_SSH_KEY }}
-          passphrase: ${{ secrets.SSH_PASSPHRASE || secrets.DEPLOY_PASSPHRASE }}
-          password: ${{ secrets.SSH_PASSWORD || secrets.DEPLOY_PASSWORD }}
-          port: ${{ secrets.SSH_PORT || secrets.DEPLOY_PORT }}
-          script_stop: true
-          script: |
-            set -e
-            mkdir -p ~/.ssh
-            if [ -n "${{ secrets.REPO_DEPLOY_KEY || secrets.DEPLOY_REPO_KEY }}" ]; then
-              echo "${{ secrets.REPO_DEPLOY_KEY || secrets.DEPLOY_REPO_KEY }}" > ~/.ssh/deploy_key
-              chmod 600 ~/.ssh/deploy_key
-            fi
-            ssh-keyscan -H github.com >> ~/.ssh/known_hosts
-            if [ -f ~/.ssh/deploy_key ]; then
-              export GIT_SSH_COMMAND="ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes"
-            fi
-            REPO_SSH="git@github.com:${{ github.repository }}.git"
-            GH_PAT="${{ secrets.GH_PAT || secrets.DEPLOY_GH_PAT }}"
-            BRANCH="${{ github.event.inputs.branch || 'main' }}"
-            DEST="${{ secrets.SERVER_PATH || vars.SERVER_PATH || secrets.DEPLOY_PATH || vars.DEPLOY_PATH }}"
-            if [ -z "$DEST" ]; then DEST="/var/www/paineis-tv"; fi
-            mkdir -p "$DEST"
-            if [ ! -d "$DEST/.git" ]; then
-              cd "$DEST"
-              if [ -f .git/config ]; then rm -rf .git; fi
-              if [ ! -f ~/.ssh/deploy_key ]; then
-                if [ -n "$GH_PAT" ]; then
-                  git clone "https://$GH_PAT@github.com/${{ github.repository }}.git" .
-                else
-                  git clone "https://github.com/${{ github.repository }}.git" .
-                fi
-              else
-                git clone "$REPO_SSH" .
-              fi
-            else
-              cd "$DEST"
-              if [ ! -f ~/.ssh/deploy_key ]; then
-                CURRENT_URL="$(git remote get-url origin || echo '')"
-                if echo "$CURRENT_URL" | grep -qE '^git@github\.com:'; then
-                  git remote set-url origin "https://github.com/${{ github.repository }}.git"
-                fi
-              fi
-              git fetch --all --prune
-              git checkout -f "$BRANCH"
-              git reset --hard "origin/$BRANCH"
-            fi
-            if [ -f scripts/post-deploy.sh ]; then chmod +x scripts/post-deploy.sh; bash scripts/post-deploy.sh; fi
-            if [ -f scripts/server-tuning.sh ]; then chmod +x scripts/server-tuning.sh; UPLOAD_MAX="${{ secrets.UPLOAD_MAX || vars.UPLOAD_MAX }}" bash scripts/server-tuning.sh; fi
+          node-version: '20'
+      - run: npm ci
+        working-directory: sistema-paineis-tv
+      - run: VITE_API_URL=${{ vars.FRONTEND_API_URL }} VITE_BACKEND_URL=${{ vars.FRONTEND_BACKEND_URL }} npm run build
+        working-directory: sistema-paineis-tv
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: sistema-paineis-tv/dist
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build_frontend
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+      TARGET_DIR: /opt/paineis-tv
+      FRONT_DIST_DIR: /var/www/paineltv
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: sistema-paineis-tv/dist
+      - run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -p "${DEPLOY_PORT:-22}" "${DEPLOY_HOST}" >> ~/.ssh/known_hosts
+      - run: |
+          rsync -az --delete -e "ssh -i ~/.ssh/id_rsa -p ${DEPLOY_PORT:-22}" --exclude ".git" --exclude "node_modules" --exclude "BACKEND/venv" ./ "${DEPLOY_USER}@${DEPLOY_HOST}:${TARGET_DIR}/"
+      - run: |
+          ssh -i ~/.ssh/id_rsa -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "python3 -m venv ${TARGET_DIR}/BACKEND/venv && ${TARGET_DIR}/BACKEND/venv/bin/pip install --upgrade pip && ${TARGET_DIR}/BACKEND/venv/bin/pip install -r ${TARGET_DIR}/BACKEND/requirements.txt"
+      - run: |
+          ssh -i ~/.ssh/id_rsa -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "mkdir -p ${FRONT_DIST_DIR} && rsync -az --delete ${TARGET_DIR}/sistema-paineis-tv/dist/ ${FRONT_DIST_DIR}/"
+      - run: |
+          ssh -i ~/.ssh/id_rsa -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "systemctl restart paineltv-backend || true"
+      - run: |
+          ssh -i ~/.ssh/id_rsa -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "systemctl reload nginx || true"
