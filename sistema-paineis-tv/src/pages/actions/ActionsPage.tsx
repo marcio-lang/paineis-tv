@@ -38,6 +38,8 @@ export const ActionsPage: React.FC = () => {
   
   // Imagens e Painéis
   const [actionImages, setActionImages] = useState<ActionImage[]>([]);
+  
+  const [newLinkUrl, setNewLinkUrl] = useState('');
   const [actionPanels, setActionPanels] = useState<Panel[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
   
@@ -94,6 +96,7 @@ export const ActionsPage: React.FC = () => {
       setActionImages([]);
     }
   };
+  
 
   // Carregar painéis associados
   const loadActionPanels = async (actionId: string) => {
@@ -348,6 +351,8 @@ export const ActionsPage: React.FC = () => {
     loadActions();
     loadPanels();
   }, []);
+
+  
 
   const columns = [
     {
@@ -633,7 +638,7 @@ export const ActionsPage: React.FC = () => {
           {/* Upload de Imagens */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Imagens * ({createImages.length})
+              Imagem/Vídeo * ({createImages.length})
             </label>
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
               <div className="text-center">
@@ -641,17 +646,17 @@ export const ActionsPage: React.FC = () => {
                 <div className="mt-4">
                   <label htmlFor="create-image-upload" className="cursor-pointer">
                     <span className="mt-2 block text-sm font-medium text-gray-900">
-                      Clique para adicionar imagens
+                      Clique para enviar imagem/vídeo
                     </span>
                     <span className="mt-1 block text-sm text-gray-500">
-                      Adicione quantas imagens desejar
+                      PNG, JPG, JPEG, WEBP, GIF, MP4, WebM ou Ogg até 150MB
                     </span>
                   </label>
                   <input
                     id="create-image-upload"
                     type="file"
                     className="hidden"
-                    accept="image/*"
+                    accept="image/*,video/mp4,video/webm,video/ogg"
                     multiple
                     onChange={(e) => {
                       if (e.target.files) {
@@ -664,11 +669,11 @@ export const ActionsPage: React.FC = () => {
               </div>
             </div>
             
-            {/* Lista de imagens selecionadas */}
+            {/* Lista de arquivos selecionados */}
             {createImages.length > 0 && (
               <div className="mt-4 space-y-2">
                 <h4 className="text-sm font-medium text-gray-900">
-                  Imagens selecionadas ({createImages.length})
+                  Arquivos selecionados ({createImages.length})
                 </h4>
                 <div className="space-y-2 max-h-32 overflow-y-auto">
                   {createImages.map((file, index) => (
@@ -800,17 +805,17 @@ export const ActionsPage: React.FC = () => {
               <div className="mt-4">
                 <label htmlFor="image-upload" className="cursor-pointer">
                   <span className="mt-2 block text-sm font-medium text-gray-900">
-                    Clique para enviar imagem
+                    Clique para enviar imagem/vídeo
                   </span>
                   <span className="mt-1 block text-sm text-gray-500">
-                    PNG, JPG ou JPEG até 150MB
+                    PNG, JPG, JPEG, WEBP, GIF, MP4, WebM ou Ogg até 150MB
                   </span>
                 </label>
                 <input
                   id="image-upload"
                   type="file"
                   className="hidden"
-                  accept="image/*"
+                  accept="image/*,video/mp4,video/webm,video/ogg"
                   multiple
                   onChange={handleImageUpload}
                   disabled={uploadingImage}
@@ -864,6 +869,7 @@ export const ActionsPage: React.FC = () => {
                 ))}
               </div>
             )}
+            
           </div>
         </div>
       </Modal>

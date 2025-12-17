@@ -341,7 +341,7 @@ export const PanelsPage: React.FC = () => {
   ];
 
   const layoutOptions = [
-    { value: 'layout_1', label: 'Layout 1 - Grade 6x4' },
+    { value: 'layout_1', label: 'Layout 1 - Imagem/Video' },
     { value: 'layout_2', label: 'Layout 2 - Lista Vertical' },
     { value: 'layout_3', label: 'Layout 3 - Carrossel' }
   ];

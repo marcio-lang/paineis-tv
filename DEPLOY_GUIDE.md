@@ -27,7 +27,7 @@ Crie em `Settings → Secrets and variables → Actions`:
   - `REPO_DEPLOY_KEY`: chave privada cuja pública está em Deploy Keys do repositório
   - ou `GH_PAT`: token de acesso (apenas leitura ao repositório) para usar HTTPS
 - Opcional para upload:
-  - `UPLOAD_MAX`: exemplo `100M` para ajustar `client_max_body_size`/`LimitRequestBody`
+  - `UPLOAD_MAX`: exemplo `150M` para ajustar `client_max_body_size`/`LimitRequestBody`
 
 ## Como o Deploy Funciona
 - O workflow em `.github/workflows/deploy.yml`:
@@ -59,7 +59,7 @@ Crie em `Settings → Secrets and variables → Actions`:
   - Nginx: `/etc/nginx/conf.d/00_client_max_body_size.conf` com `client_max_body_size <UPLOAD_MAX>;`
   - Apache: `LimitRequestBody` (50 MB padrão no script)
 - Reload automático após validação da configuração
-- Defina `UPLOAD_MAX` em Actions para ajustar (exemplo: `100M`)
+- Defina `UPLOAD_MAX` em Actions para ajustar (exemplo: `150M`)
 
 ## Variáveis de Frontend
 - Como o domínio é HTTP, configure URLs do frontend como:

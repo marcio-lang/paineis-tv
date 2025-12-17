@@ -13,6 +13,7 @@ import re
 import jwt
 import threading
 import time
+from sqlalchemy import text
 
 app = Flask(__name__)
 
@@ -89,6 +90,7 @@ class Action(db.Model):
     # Relacionamento many-to-many com Panel
     panels = db.relationship('Panel', secondary='action_panel', back_populates='actions', lazy='select')
     images = db.relationship('ActionImage', backref='action', lazy=True, cascade='all, delete-orphan')
+    
 
 class ActionImage(db.Model):
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -97,6 +99,8 @@ class ActionImage(db.Model):
     file_path = db.Column(db.String(500), nullable=False)
     action_id = db.Column(db.String(36), db.ForeignKey('action.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=get_brazil_now)
+
+ 
 
 # Tabela de associação para relacionamento many-to-many entre Action e Panel
 action_panel_association = db.Table('action_panel',
@@ -368,7 +372,7 @@ def butcher_product_to_dict(self):
 ButcherProduct.to_dict = butcher_product_to_dict
 
 # Extensões permitidas
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'gif', 'mp4'}
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'gif', 'mp4', 'webm', 'ogg'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -377,7 +381,7 @@ def get_file_type(filename):
     ext = filename.rsplit('.', 1)[1].lower()
     if ext in ['png', 'jpg', 'jpeg', 'webp', 'gif']:
         return 'image'
-    elif ext == 'mp4':
+    elif ext in ['mp4', 'webm', 'ogg']:
         return 'video'
     return 'unknown'
 
@@ -1017,10 +1021,6 @@ def upload_action_images(action_id):
     
     for file in files:
         if file and file.filename and allowed_file(file.filename):
-            # Verificar se é imagem
-            if get_file_type(file.filename) != 'image':
-                continue
-                
             filename = secure_filename(file.filename)
             unique_filename = f"{uuid.uuid4()}_{filename}"
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
@@ -1046,6 +1046,14 @@ def upload_action_images(action_id):
     
     db.session.commit()
     return jsonify({'uploaded_files': uploaded_files})
+
+@app.route('/api/actions/<action_id>/links', methods=['POST'])
+def add_action_link(action_id):
+    return jsonify({'error': 'Links desativados'}), 410
+
+@app.route('/api/actions/<action_id>/links/<link_id>', methods=['DELETE'])
+def delete_action_link(action_id, link_id):
+    return jsonify({'error': 'Links desativados'}), 410
 
 @app.route('/api/actions/<action_id>/images/<image_id>', methods=['DELETE'])
 def delete_action_image(action_id, image_id):
@@ -1095,27 +1103,26 @@ def get_player_data(fixed_url):
             print(f"=== PROCESSANDO AÇÃO: {action.name} (ID: {action.id}) ===")
             print(f"Número de imagens na ação: {len(action.images) if action.images else 0}")
             
-            if action.images and len(action.images) > 0:  # Verificação mais explícita
-                image_list = []
-                for i, image in enumerate(action.images):
-                    print(f"  Imagem {i+1}: {image.filename} (ID: {image.id})")
-                    image_list.append({
-                        'id': image.id,
-                        'filename': image.filename,
-                        'url': f'/api/media/{image.filename}'
-                    })
-                
+            image_list = []
+            for i, image in enumerate(action.images or []):
+                print(f"  Imagem {i+1}: {image.filename} (ID: {image.id})")
+                image_list.append({
+                    'id': image.id,
+                    'filename': image.filename,
+                    'url': f'/api/media/{image.filename}'
+                })
+            if image_list:
                 actions_data.append({
                     'id': action.id,
                     'name': action.name,
                     'start_date': action.start_date.isoformat(),
                     'end_date': action.end_date.isoformat(),
-                    'has_border': getattr(action, 'has_border', False),  # Usar getattr para evitar erro se o campo não existir
+                    'has_border': getattr(action, 'has_border', False),
                     'images': image_list
                 })
-                print(f"Ação {action.name} adicionada com {len(image_list)} imagens")
+                print(f"Ação {action.name} adicionada com {len(image_list)} itens")
             else:
-                print(f"Ação {action.name} IGNORADA - sem imagens válidas")
+                print(f"Ação {action.name} IGNORADA - sem itens válidos")
         
         return jsonify({
             'active': True,
@@ -1240,7 +1247,7 @@ def get_panel_play_data(panel_id):
             print(f"=== PROCESSANDO AÇÃO (PLAY): {action.name} (ID: {action.id}) ===")
             print(f"Número de imagens na ação: {len(action.images) if action.images else 0}")
             
-            if action.images and len(action.images) > 0:  # Verificação mais explícita
+            if action.images and len(action.images) > 0:
                 image_list = []
                 for i, image in enumerate(action.images):
                     print(f"  Imagem {i+1}: {image.filename} (ID: {image.id})")
@@ -1258,9 +1265,9 @@ def get_panel_play_data(panel_id):
                     'has_border': action.has_border,
                     'images': image_list
                 })
-                print(f"Ação {action.name} adicionada com {len(image_list)} imagens")
+                print(f"Ação {action.name} adicionada com {len(image_list)} itens")
             else:
-                print(f"Ação {action.name} IGNORADA - sem imagens válidas")
+                print(f"Ação {action.name} IGNORADA - sem itens válidos")
 
         return jsonify({
             'active': True,
@@ -1832,10 +1839,12 @@ def start_toledo_monitor(path, interval_minutes):
 
 try:
     import os
-    watch_path = os.environ.get('TOLEDO_WATCH_PATH', r'\\10.0.4.22\toledo\ITENSMGV.TXT')
-    watch_interval = int(os.environ.get('TOLEDO_WATCH_INTERVAL_MIN', '30'))
-    start_toledo_monitor(watch_path, watch_interval)
-    print('[MONITOR]', 'started', watch_path, watch_interval)
+    enabled = os.environ.get('TOLEDO_MONITOR_ENABLED', '1') in ['1', 'true', 'True']
+    if enabled:
+        watch_path = os.environ.get('TOLEDO_WATCH_PATH', r'\\10.0.4.22\toledo\ITENSMGV.TXT')
+        watch_interval = int(os.environ.get('TOLEDO_WATCH_INTERVAL_MIN', '30'))
+        start_toledo_monitor(watch_path, watch_interval)
+        print('[MONITOR]', 'started', watch_path, watch_interval)
 except Exception as _e:
     print('[MONITOR]', 'startup error', str(_e))
 
@@ -2821,4 +2830,11 @@ if __name__ == '__main__':
         db.create_all()
         create_admin_user()
         create_default_departments()
-    app.run(host='0.0.0.0', port=5000, debug=True)
+        try:
+            db.session.execute(text('DROP TABLE IF EXISTS action_link'))
+            db.session.commit()
+        except Exception as e:
+            print(f"[DB] Erro ao remover tabela action_link: {str(e)}")
+    port = int(os.environ.get('PORT', '5000'))
+    debug = os.environ.get('FLASK_DEBUG', os.environ.get('DEBUG', '1')) in ['1', 'true', 'True']
+    app.run(host='0.0.0.0', port=port, debug=debug)

@@ -62,7 +62,9 @@ const PlayerTVPage: React.FC = () => {
   // Configurações do player
   const SHOW_PANEL_INFO = (import.meta.env.VITE_SHOW_PANEL_INFO || 'true') === 'true';
   const SHOW_DEBUG_INFO = (import.meta.env.VITE_SHOW_DEBUG_INFO || 'false') === 'true';
-  const SHOW_PROGRESS = (import.meta.env.VITE_SHOW_PROGRESS || 'true') === 'true';
+  const SHOW_PROGRESS = (import.meta.env.VITE_SHOW_PROGRESS || 'false') === 'true';
+  const SHOW_CONTROLS = (import.meta.env.VITE_SHOW_CONTROLS || 'false') === 'true';
+  const MEDIA_FIT_MODE = (import.meta.env.VITE_MEDIA_FIT_MODE || 'cover') as 'cover' | 'contain';
 
   // Transformações de imagem
   const IMAGE_ROTATION_DEG = Number(import.meta.env.VITE_IMAGE_ROTATION_DEG || '0');
@@ -72,6 +74,14 @@ const PlayerTVPage: React.FC = () => {
   const mediaTransformStyle = {
     transform: `${IMAGE_ROTATION_DEG ? `rotate(${IMAGE_ROTATION_DEG}deg)` : ''}${IMAGE_FLIP_HORIZONTAL ? ' scaleX(-1)' : ''}${IMAGE_FLIP_VERTICAL ? ' scaleY(-1)' : ''}`.trim() || 'none',
   };
+  const isVideoFile = (s: string) => /\.(mp4|webm|ogg)$/i.test(s);
+  const isAppMediaUrl = (s: string) => /^\/api\/media\//.test(s || '');
+  const isRenderableItem = (item: ActionImage) => {
+    const u = item?.url || '';
+    const f = item?.filename || '';
+    return isVideoFile(u || f) || isAppMediaUrl(u);
+  };
+  const mediaObjectClass = MEDIA_FIT_MODE === 'cover' ? 'object-cover' : 'object-contain';
 
   // Intervalo de slides
   const SLIDE_INTERVAL_MS = Number(import.meta.env.VITE_SLIDE_INTERVAL_MS || '5000');
@@ -415,110 +425,157 @@ const PlayerTVPage: React.FC = () => {
     switch (layoutType) {
       case 'layout_1':
         // Carrossel - 1 imagem por vez
-        const currentImage = currentAction.images[currentImageIndex % currentAction.images.length];
-        const nextImage = currentAction.images[nextImageIndex % currentAction.images.length];
+        const items = (currentAction.images || []).filter(isRenderableItem);
+        if (!items || items.length === 0) {
+          return (
+            <div className="h-screen bg-black flex items-center justify-center">
+              <div className="text-center">
+                <div className="text-blue-400 text-4xl mb-4">📺</div>
+                <div className="text-white text-xl mb-2">Nenhuma mídia válida para exibir</div>
+                <div className="text-white text-xs opacity-50 mt-4">
+                  Envie imagens/vídeos ou remova links não suportados
+                </div>
+              </div>
+            </div>
+          );
+        }
+        const currentImage = items[currentImageIndex % items.length];
+        const nextImage = items[nextImageIndex % items.length];
         
         return (
           <div className="w-full h-full flex flex-col">
-            <div className="flex-1 flex items-center justify-center p-2 sm:p-4 md:p-6 lg:p-8 relative overflow-hidden">
-              <div className="w-full h-full relative flex items-center justify-center bg-black">
+            <div className="flex-1 relative overflow-hidden p-0">
+              <div className="w-full h-full relative bg-black">
                 {/* Imagem atual */}
                 <div 
                   className={`absolute inset-0 transition-all duration-1000 ease-in-out flex items-center justify-center ${
                     isTransitioning ? 'opacity-0 transform translate-x-[-100%]' : 'opacity-100 transform translate-x-0'
                   }`}
                 >
-                  <div className="w-full h-full flex items-center justify-center">
-                    <img
-                      src={`${API_URL}${currentImage.url}`}
-                      alt={currentImage.filename}
-                      className="max-w-full max-h-full object-contain rounded-lg shadow-lg"
-                      style={mediaTransformStyle}
-                      onLoad={() => handleImageLoad(currentImageIndex, currentImage.filename)}
-                      onError={() => {
-                        handleImageError(currentImageIndex, currentImage.filename, `${API_URL}${currentImage.url}`, 'carrossel');
-                      }}
-                    />
+                  <div className="absolute inset-0 w-full h-full">
+                    {isVideoFile(currentImage.url || currentImage.filename) ? (
+                      <video
+                        src={`${API_URL}${currentImage.url}`}
+                        className={`w-full h-full ${mediaObjectClass}`}
+                        style={mediaTransformStyle}
+                        autoPlay
+                        muted
+                        playsInline
+                        preload="auto"
+                        onLoadedData={() => handleImageLoad(currentImageIndex, currentImage.filename)}
+                        onError={() => {
+                          handleImageError(currentImageIndex, currentImage.filename, `${API_URL}${currentImage.url}`, 'carrossel');
+                        }}
+                        onEnded={() => {
+                          if (!isTransitioning) {
+                            const nextIndex = (currentImageIndex + 1) % items.length;
+                            setNextImageIndex(nextIndex);
+                            setIsTransitioning(true);
+                            setTimeout(() => {
+                              setCurrentImageIndex(nextIndex);
+                              setIsTransitioning(false);
+                            }, 1000);
+                          }
+                        }}
+                      />
+                    ) : (
+                      <img
+                        src={`${API_URL}${currentImage.url}`}
+                        alt={currentImage.filename}
+                        className={`w-full h-full ${mediaObjectClass}`}
+                        style={mediaTransformStyle}
+                        onLoad={() => handleImageLoad(currentImageIndex, currentImage.filename)}
+                        onError={() => {
+                          handleImageError(currentImageIndex, currentImage.filename, `${API_URL}${currentImage.url}`, 'carrossel');
+                        }}
+                      />
+                    )}
                   </div>
                 </div>
                 
                 {/* Próxima imagem (durante transição) */}
                 {isTransitioning && (
-                  <div className="absolute inset-0 transition-all duration-1000 ease-in-out opacity-100 transform translate-x-0 flex items-center justify-center">
-                    <div className="w-full h-full flex items-center justify-center">
-                      <img
-                        src={`${API_URL}${nextImage.url}`}
-                        alt={nextImage.filename}
-                        className="max-w-full max-h-full object-contain rounded-lg shadow-lg"
-                        style={mediaTransformStyle}
-                      />
+                  <div className="absolute inset-0 transition-all duration-1000 ease-in-out opacity-100 transform translate-x-0">
+                    <div className="absolute inset-0 w-full h-full">
+                      {isVideoFile(nextImage.url || nextImage.filename) ? (
+                        <video
+                          src={`${API_URL}${nextImage.url}`}
+                          className={`w-full h-full ${mediaObjectClass}`}
+                          style={mediaTransformStyle}
+                          autoPlay
+                          muted
+                          playsInline
+                          preload="auto"
+                        />
+                      ) : (
+                        <img
+                          src={`${API_URL}${nextImage.url}`}
+                          alt={nextImage.filename}
+                          className={`w-full h-full ${mediaObjectClass}`}
+                          style={mediaTransformStyle}
+                        />
+                      )}
                     </div>
                   </div>
                 )}
                 
                 {/* Indicadores de posição */}
-                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-2">
-                  {currentAction.images.map((_, index) => (
-                    <div
-                      key={index}
-                      className={`w-3 h-3 rounded-full transition-all duration-300 ${
-                        index === (currentImageIndex % currentAction.images.length)
-                          ? 'bg-white shadow-lg'
-                          : 'bg-white bg-opacity-50'
-                      }`}
-                    />
-                  ))}
-                </div>
+                {SHOW_PROGRESS && (
+                  <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-2">
+                    {items.map((_, index) => (
+                      <div
+                        key={index}
+                        className={`w-3 h-3 rounded-full transition-all duration-300 ${
+                          index === (currentImageIndex % items.length)
+                            ? 'bg-white shadow-lg'
+                            : 'bg-white bg-opacity-50'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                )}
                 
                 {/* Controles de navegação */}
-                <button
-                  className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white p-3 rounded-full hover:bg-opacity-75 transition-all duration-200"
-                  onClick={() => {
-                    if (!isTransitioning) {
-                      const prevIndex = currentImageIndex === 0 ? currentAction.images.length - 1 : currentImageIndex - 1;
-                      setNextImageIndex(prevIndex);
-                      setIsTransitioning(true);
-                      setTimeout(() => {
-                        setCurrentImageIndex(prevIndex);
-                        setIsTransitioning(false);
-                      }, 1000);
-                    }
-                  }}
-                >
-                  &#8249;
-                </button>
-                
-                <button
-                  className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white p-3 rounded-full hover:bg-opacity-75 transition-all duration-200"
-                  onClick={() => {
-                    if (!isTransitioning) {
-                      const nextIndex = (currentImageIndex + 1) % currentAction.images.length;
-                      setNextImageIndex(nextIndex);
-                      setIsTransitioning(true);
-                      setTimeout(() => {
-                        setCurrentImageIndex(nextIndex);
-                        setIsTransitioning(false);
-                      }, 1000);
-                    }
-                  }}
-                >
-                  &#8250;
-                </button>
+                {SHOW_CONTROLS && (
+                  <>
+                    <button
+                      className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white p-3 rounded-full hover:bg-opacity-75 transition-all duration-200"
+                      onClick={() => {
+                        if (!isTransitioning) {
+                          const prevIndex = currentImageIndex === 0 ? items.length - 1 : currentImageIndex - 1;
+                          setNextImageIndex(prevIndex);
+                          setIsTransitioning(true);
+                          setTimeout(() => {
+                            setCurrentImageIndex(prevIndex);
+                            setIsTransitioning(false);
+                          }, 1000);
+                        }
+                      }}
+                    >
+                      &#8249;
+                    </button>
+                    
+                    <button
+                      className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white p-3 rounded-full hover:bg-opacity-75 transition-all duration-200"
+                      onClick={() => {
+                        if (!isTransitioning) {
+                          const nextIndex = (currentImageIndex + 1) % items.length;
+                          setNextImageIndex(nextIndex);
+                          setIsTransitioning(true);
+                          setTimeout(() => {
+                            setCurrentImageIndex(nextIndex);
+                            setIsTransitioning(false);
+                          }, 1000);
+                        }
+                      }}
+                    >
+                      &#8250;
+                    </button>
+                  </>
+                )}
               </div>
             </div>
             
-            {/* Barra de informações */}
-            <div className="h-16 flex items-center justify-center bg-gradient-to-r from-gray-900 to-gray-800 bg-opacity-90">
-              <div className="text-white text-center">
-                <div className="text-sm font-medium">
-                  {currentImage.filename} ({(currentImageIndex % currentAction.images.length) + 1} de {currentAction.images.length})
-                </div>
-                <div className="text-xs opacity-75">
-                  Ciclo: {Math.floor(currentImageIndex / currentAction.images.length) + 1} | 
-                  Próxima em {Math.ceil((SLIDE_INTERVAL_MS - (Date.now() % SLIDE_INTERVAL_MS)) / 1000)}s
-                </div>
-              </div>
-            </div>
           </div>
         );
 

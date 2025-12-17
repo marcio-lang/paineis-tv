@@ -3,9 +3,9 @@ on:
   workflow_dispatch:
     inputs:
       upload_max:
-        description: Max upload size (e.g., 100M)
+        description: Max upload size (e.g., 150M)
         required: false
-        default: 100M
+        default: 150M
 jobs:
   tune:
     runs-on: ubuntu-latest
@@ -23,7 +23,7 @@ jobs:
             set -e
             MAX="${{ github.event.inputs.upload_max }}"
             if [ -z "$MAX" ]; then MAX="${{ secrets.UPLOAD_MAX || vars.UPLOAD_MAX }}"; fi
-            if [ -z "$MAX" ]; then MAX="100M"; fi
+            if [ -z "$MAX" ]; then MAX="150M"; fi
             mkdir -p /etc/nginx/conf.d
             if command -v sudo >/dev/null 2>&1; then
               echo "client_max_body_size $MAX;" | sudo tee /etc/nginx/conf.d/00_client_max_body_size.conf >/dev/null

@@ -44,9 +44,9 @@ Este guia explica como:
 
 ### Secrets (Actions)
 Crie em `Settings → Secrets and variables → Actions`:
-- `DEPLOY_HOST`: IP ou domínio da VPS (ex.: `212.85.10.184`)
-- `DEPLOY_USER`: `deploy`
-- `DEPLOY_SSH_KEY`: conteúdo da chave privada (arquivo sem `.pub`)
+- `DEPLOY_HOST`: 212.85.10.184
+- `DEPLOY_USER`: `root`
+- `DEPLOY_SSH_KEY`: Mdpe101315@# (arquivo sem `.pub`)
 - `DEPLOY_PORT`: `22` (se usar porta diferente do padrão)
 
 ### Variables (Actions)

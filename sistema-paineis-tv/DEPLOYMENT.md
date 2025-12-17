@@ -204,10 +204,16 @@ server {
         proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_cache_bypass \$http_upgrade;
         
-        # Timeout settings
+        # Upload settings - CRÍTICO para upload de imagens
+        client_max_body_size 100M;
+        client_body_timeout 600s;
+        client_body_buffer_size 128M;
+        
+        # Timeout settings - aumentados para uploads grandes
         proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
+        proxy_send_timeout 600s;
+        proxy_read_timeout 600s;
+        proxy_request_buffering on;
     }
     
     # Media files

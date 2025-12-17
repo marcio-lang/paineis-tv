@@ -112,6 +112,8 @@ class ActionService {
     return action.images || [];
   }
 
+  // Links desativados
+
   // Utilitários
   getImageUrl(filename: string): string {
     return `${api.defaults.baseURL}/media/${filename}`;
@@ -143,11 +145,20 @@ class ActionService {
 
   validateImageFile(file: File): string[] {
     const errors: string[] = [];
-    const allowedTypes = ['image/png', 'image/jpg', 'image/jpeg', 'image/webp', 'image/gif'];
+    const allowedTypes = [
+      'image/png',
+      'image/jpg',
+      'image/jpeg',
+      'image/webp',
+      'image/gif',
+      'video/mp4',
+      'video/webm',
+      'video/ogg'
+    ];
     const maxSize = 150 * 1024 * 1024;
 
     if (!allowedTypes.includes(file.type)) {
-      errors.push('Tipo de arquivo não permitido. Use PNG, JPG ou JPEG');
+      errors.push('Tipo de arquivo não permitido. Use imagem (PNG/JPG/JPEG/WEBP/GIF) ou vídeo (MP4/WebM/Ogg)');
     }
 
     if (file.size > maxSize) {
