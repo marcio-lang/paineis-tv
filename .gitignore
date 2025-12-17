@@ -1,4 +1,5 @@
 BACKEND/.venv/
+BACKEND/venv/
 BACKEND/__pycache__/
 BACKEND/instance/paineltv.db
 BACKEND/uploads/
