@@ -27,8 +27,8 @@ jobs:
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
       DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-      TARGET_DIR: /opt/paineis-tv
-      FRONT_DIST_DIR: /var/www/paineltv
+      TARGET_DIR: /var/www/paineis-tv
+      FRONT_DIST_DIR: /var/www/paineis-tv/frontend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -41,12 +41,16 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -p "${DEPLOY_PORT:-22}" "${DEPLOY_HOST}" >> ~/.ssh/known_hosts
       - run: |
-          rsync -az --delete -e "ssh -i ~/.ssh/id_rsa -p ${DEPLOY_PORT:-22}" --exclude ".git" --exclude "node_modules" --exclude "BACKEND/venv" ./ "${DEPLOY_USER}@${DEPLOY_HOST}:${TARGET_DIR}/"
+          rsync -az --delete -e "ssh -i ~/.ssh/id_rsa -p ${DEPLOY_PORT:-22}" --exclude ".git" --exclude "node_modules" --exclude "BACKEND/venv" --exclude "BACKEND/uploads" --exclude "BACKEND/instance" ./ "${DEPLOY_USER}@${DEPLOY_HOST}:${TARGET_DIR}/"
       - run: |
           ssh -i ~/.ssh/id_rsa -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "python3 -m venv ${TARGET_DIR}/BACKEND/venv && ${TARGET_DIR}/BACKEND/venv/bin/pip install --upgrade pip && ${TARGET_DIR}/BACKEND/venv/bin/pip install -r ${TARGET_DIR}/BACKEND/requirements.txt"
+      - run: |
+          ssh -i ~/.ssh/id_rsa -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "bash ${TARGET_DIR}/scripts/setup-backend-service.sh"
       - run: |
           ssh -i ~/.ssh/id_rsa -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "mkdir -p ${FRONT_DIST_DIR} && rsync -az --delete ${TARGET_DIR}/sistema-paineis-tv/dist/ ${FRONT_DIST_DIR}/"
       - run: |
           ssh -i ~/.ssh/id_rsa -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "systemctl restart paineltv-backend || true"
       - run: |
           ssh -i ~/.ssh/id_rsa -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "systemctl reload nginx || true"
+      - run: |
+          ssh -i ~/.ssh/id_rsa -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "curl -sS -f http://127.0.0.1:5000/api/health || true"
