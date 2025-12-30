@@ -24,9 +24,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: build_frontend
     env:
-      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-      DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST || secrets.SSH_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER || secrets.SSH_USER }}
+      DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || secrets.SSH_PORT }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY || secrets.SSH_KEY || secrets.SSH_PRIVATE_KEY }}
+      DEPLOY_PASSWORD: ${{ secrets.DEPLOY_PASSWORD || secrets.SSH_PASSWORD }}
       TARGET_DIR: /var/www/paineis-tv
       FRONT_DIST_DIR: /var/www/paineis-tv/frontend
     steps:
@@ -35,22 +37,107 @@ jobs:
         with:
           name: dist
           path: sistema-paineis-tv/dist
+      - name: Preflight
+        run: |
+          set -e
+          if [ -z "${DEPLOY_HOST:-}" ]; then echo "DEPLOY_HOST ausente (secrets.DEPLOY_HOST ou secrets.SSH_HOST)"; exit 1; fi
+          if [ -z "${DEPLOY_USER:-}" ]; then echo "DEPLOY_USER ausente (secrets.DEPLOY_USER ou secrets.SSH_USER)"; exit 1; fi
+          if [ -z "${DEPLOY_SSH_KEY:-}" ] && [ -z "${DEPLOY_PASSWORD:-}" ]; then
+            echo "Autenticação ausente: defina DEPLOY_SSH_KEY (recomendado) ou DEPLOY_PASSWORD/SSH_PASSWORD"
+            exit 1
+          fi
       - run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
+          touch ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          if [ -n "${DEPLOY_SSH_KEY:-}" ]; then
+            printf '%s' "$DEPLOY_SSH_KEY" > ~/.ssh/id_rsa
+            chmod 600 ~/.ssh/id_rsa
+            echo "USE_SSHPASS=0" >> "$GITHUB_ENV"
+          else
+            sudo apt-get update
+            sudo apt-get install -y sshpass
+            echo "USE_SSHPASS=1" >> "$GITHUB_ENV"
+          fi
           ssh-keyscan -p "${DEPLOY_PORT:-22}" "${DEPLOY_HOST}" >> ~/.ssh/known_hosts
       - run: |
-          rsync -az --delete -e "ssh -i ~/.ssh/id_rsa -p ${DEPLOY_PORT:-22}" --exclude ".git" --exclude "node_modules" --exclude "BACKEND/venv" --exclude "BACKEND/uploads" --exclude "BACKEND/instance" ./ "${DEPLOY_USER}@${DEPLOY_HOST}:${TARGET_DIR}/"
+          set -e
+          if [ "${USE_SSHPASS}" = "1" ]; then
+            sshpass -e ssh -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "\
+              set -e; \
+              SUDO=''; if command -v sudo >/dev/null 2>&1; then SUDO='sudo'; fi; \
+              \$SUDO mkdir -p '${TARGET_DIR}' '${FRONT_DIST_DIR}'; \
+              if ! command -v rsync >/dev/null 2>&1; then \$SUDO apt-get update -y && \$SUDO apt-get install -y rsync; fi; \
+              if ! python3 -c 'import venv' >/dev/null 2>&1; then \$SUDO apt-get update -y && \$SUDO apt-get install -y python3-venv; fi \
+            "
+          else
+            ssh -i ~/.ssh/id_rsa -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "\
+              set -e; \
+              SUDO=''; if command -v sudo >/dev/null 2>&1; then SUDO='sudo'; fi; \
+              \$SUDO mkdir -p '${TARGET_DIR}' '${FRONT_DIST_DIR}'; \
+              if ! command -v rsync >/dev/null 2>&1; then \$SUDO apt-get update -y && \$SUDO apt-get install -y rsync; fi; \
+              if ! python3 -c 'import venv' >/dev/null 2>&1; then \$SUDO apt-get update -y && \$SUDO apt-get install -y python3-venv; fi \
+            "
+          fi
+        env:
+          SSHPASS: ${{ env.DEPLOY_PASSWORD }}
       - run: |
-          ssh -i ~/.ssh/id_rsa -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "python3 -m venv ${TARGET_DIR}/BACKEND/venv && ${TARGET_DIR}/BACKEND/venv/bin/pip install --upgrade pip && ${TARGET_DIR}/BACKEND/venv/bin/pip install -r ${TARGET_DIR}/BACKEND/requirements.txt"
+          set -e
+          if [ "${USE_SSHPASS}" = "1" ]; then
+            sshpass -e rsync -az --delete --rsync-path="sudo rsync" -e "ssh -p ${DEPLOY_PORT:-22}" --exclude ".git" --exclude "node_modules" --exclude "BACKEND/venv" --exclude "BACKEND/.venv" --exclude "BACKEND/uploads" --exclude "BACKEND/instance" ./ "${DEPLOY_USER}@${DEPLOY_HOST}:${TARGET_DIR}/"
+          else
+            rsync -az --delete --rsync-path="sudo rsync" -e "ssh -i ~/.ssh/id_rsa -p ${DEPLOY_PORT:-22}" --exclude ".git" --exclude "node_modules" --exclude "BACKEND/venv" --exclude "BACKEND/.venv" --exclude "BACKEND/uploads" --exclude "BACKEND/instance" ./ "${DEPLOY_USER}@${DEPLOY_HOST}:${TARGET_DIR}/"
+          fi
+        env:
+          SSHPASS: ${{ env.DEPLOY_PASSWORD }}
       - run: |
-          ssh -i ~/.ssh/id_rsa -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "bash ${TARGET_DIR}/scripts/setup-backend-service.sh"
+          set -e
+          if [ "${USE_SSHPASS}" = "1" ]; then
+            sshpass -e ssh -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "python3 -m venv ${TARGET_DIR}/BACKEND/.venv && ${TARGET_DIR}/BACKEND/.venv/bin/pip install --upgrade pip && ${TARGET_DIR}/BACKEND/.venv/bin/pip install -r ${TARGET_DIR}/BACKEND/requirements.txt"
+          else
+            ssh -i ~/.ssh/id_rsa -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "python3 -m venv ${TARGET_DIR}/BACKEND/.venv && ${TARGET_DIR}/BACKEND/.venv/bin/pip install --upgrade pip && ${TARGET_DIR}/BACKEND/.venv/bin/pip install -r ${TARGET_DIR}/BACKEND/requirements.txt"
+          fi
+        env:
+          SSHPASS: ${{ env.DEPLOY_PASSWORD }}
       - run: |
-          ssh -i ~/.ssh/id_rsa -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "mkdir -p ${FRONT_DIST_DIR} && rsync -az --delete ${TARGET_DIR}/sistema-paineis-tv/dist/ ${FRONT_DIST_DIR}/"
+          set -e
+          if [ "${USE_SSHPASS}" = "1" ]; then
+            sshpass -e ssh -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "bash ${TARGET_DIR}/scripts/setup-backend-service.sh"
+          else
+            ssh -i ~/.ssh/id_rsa -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "bash ${TARGET_DIR}/scripts/setup-backend-service.sh"
+          fi
+        env:
+          SSHPASS: ${{ env.DEPLOY_PASSWORD }}
       - run: |
-          ssh -i ~/.ssh/id_rsa -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "systemctl restart paineltv-backend || true"
+          set -e
+          if [ "${USE_SSHPASS}" = "1" ]; then
+            sshpass -e ssh -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "mkdir -p ${FRONT_DIST_DIR} && rsync -az --delete ${TARGET_DIR}/sistema-paineis-tv/dist/ ${FRONT_DIST_DIR}/"
+          else
+            ssh -i ~/.ssh/id_rsa -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "mkdir -p ${FRONT_DIST_DIR} && rsync -az --delete ${TARGET_DIR}/sistema-paineis-tv/dist/ ${FRONT_DIST_DIR}/"
+          fi
+        env:
+          SSHPASS: ${{ env.DEPLOY_PASSWORD }}
       - run: |
-          ssh -i ~/.ssh/id_rsa -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "systemctl reload nginx || true"
+          if [ "${USE_SSHPASS}" = "1" ]; then
+            sshpass -e ssh -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "systemctl restart paineltv-backend || true"
+          else
+            ssh -i ~/.ssh/id_rsa -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "systemctl restart paineltv-backend || true"
+          fi
+        env:
+          SSHPASS: ${{ env.DEPLOY_PASSWORD }}
       - run: |
-          ssh -i ~/.ssh/id_rsa -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "curl -sS -f http://127.0.0.1:5000/api/health || true"
+          if [ "${USE_SSHPASS}" = "1" ]; then
+            sshpass -e ssh -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "systemctl reload nginx || true"
+          else
+            ssh -i ~/.ssh/id_rsa -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "systemctl reload nginx || true"
+          fi
+        env:
+          SSHPASS: ${{ env.DEPLOY_PASSWORD }}
+      - run: |
+          if [ "${USE_SSHPASS}" = "1" ]; then
+            sshpass -e ssh -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "curl -sS -f http://127.0.0.1:5000/api/health || true"
+          else
+            ssh -i ~/.ssh/id_rsa -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "curl -sS -f http://127.0.0.1:5000/api/health || true"
+          fi
+        env:
+          SSHPASS: ${{ env.DEPLOY_PASSWORD }}
