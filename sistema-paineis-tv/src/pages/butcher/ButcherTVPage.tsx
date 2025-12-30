@@ -139,14 +139,16 @@ export const ButcherTVPage: React.FC = () => {
 
   // Criar grid 6x4 com produtos nas posições corretas
   const createPositionalGrid = () => {
-    const grid: (ButcherProduct | null)[] = new Array(18).fill(null);
+    const grid: (ButcherProduct | null)[] = new Array(24).fill(null);
     
     // Colocar cada produto na sua posição específica (posição 1-24 -> índice 0-23)
     products.forEach(product => {
-      if (product.position >= 1 && product.position <= 18) {
+      // Tentar colocar na posição solicitada se estiver livre
+      if (product.position >= 1 && product.position <= 24 && grid[product.position - 1] === null) {
         grid[product.position - 1] = product;
       } else {
-        // Se não tem posição definida ou está fora do range, colocar na primeira posição livre
+        // Se a posição já estiver ocupada ou estiver fora do range (1-24), 
+        // colocar na primeira posição livre disponível
         const freeIndex = grid.findIndex(slot => slot === null);
         if (freeIndex !== -1) {
           grid[freeIndex] = product;
@@ -209,7 +211,7 @@ export const ButcherTVPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Grid Posicional 6x3 */}
+        {/* Grid Posicional 6x4 */}
         <div className="relative z-10 px-6 pb-4">
             {products.length === 0 ? (
               <div className="text-center py-20 animate-fade-in">
@@ -217,7 +219,7 @@ export const ButcherTVPage: React.FC = () => {
                 <div className="text-xl text-red-100">Em breve novos produtos!</div>
               </div>
             ) : (
-              <div className="grid grid-cols-6 grid-rows-3 gap-4">
+              <div className="grid grid-cols-6 grid-rows-4 gap-4">
                 {gridProducts.map((product, index) => {
                     const position = index + 1; // Posição 1-24
                     

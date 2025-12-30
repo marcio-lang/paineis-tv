@@ -78,9 +78,9 @@ async function apiRequest<T>(
       }
       
       throw new ApiError(
-        errorData.message || `HTTP ${response.status}`,
+        (errorData && (errorData.error || errorData.message)) || `HTTP ${response.status}`,
         response.status,
-        errorData.errors
+        errorData && errorData.errors
       );
     }
 

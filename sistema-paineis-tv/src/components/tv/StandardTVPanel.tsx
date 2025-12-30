@@ -85,6 +85,16 @@ export const StandardTVPanel: React.FC<StandardTVPanelProps> = ({
 
   // Definir cores baseadas no código do departamento (ACG, HRT, PAD)
   const getDepartmentColors = () => {
+    // Usar a cor definida no departamento, se disponível
+    if (department.color) {
+      return {
+        primary: department.color,
+        secondary: adjustColorBrightness(department.color, -20), // 20% mais escuro
+        accent: adjustColorBrightness(department.color, 20), // 20% mais claro
+        gradient: `linear-gradient(135deg, ${department.color} 0%, ${adjustColorBrightness(department.color, -20)} 100%)`
+      };
+    }
+
     const code = (department?.code || '').toUpperCase();
     switch (code) {
       case 'ACG':
@@ -116,6 +126,34 @@ export const StandardTVPanel: React.FC<StandardTVPanelProps> = ({
           gradient: 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)'
         };
     }
+  };
+
+  // Função auxiliar para ajustar brilho da cor (hex)
+  const adjustColorBrightness = (hex: string, percent: number) => {
+    // Remover hash
+    hex = hex.replace(/^\s*#|\s*$/g, '');
+
+    // Converter para RGB
+    let r = parseInt(hex.substr(0, 2), 16);
+    let g = parseInt(hex.substr(2, 2), 16);
+    let b = parseInt(hex.substr(4, 2), 16);
+
+    // Ajustar brilho
+    r = Math.round(r * (1 + percent / 100));
+    g = Math.round(g * (1 + percent / 100));
+    b = Math.round(b * (1 + percent / 100));
+
+    // Garantir limites 0-255
+    r = Math.min(255, Math.max(0, r));
+    g = Math.min(255, Math.max(0, g));
+    b = Math.min(255, Math.max(0, b));
+
+    // Converter de volta para Hex
+    const rr = (r.toString(16).length === 1 ? '0' : '') + r.toString(16);
+    const gg = (g.toString(16).length === 1 ? '0' : '') + g.toString(16);
+    const bb = (b.toString(16).length === 1 ? '0' : '') + b.toString(16);
+
+    return `#${rr}${gg}${bb}`;
   };
 
   if (loading) {

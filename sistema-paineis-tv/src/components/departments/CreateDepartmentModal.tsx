@@ -11,8 +11,7 @@ const CreateDepartmentModal: React.FC<CreateDepartmentModalProps> = ({ onClose, 
     name: '',
     code: '',
     description: '',
-    color: '#3B82F6',
-    keywords: ''
+    color: '#3B82F6'
   });
 
   const [loading, setLoading] = useState(false);
@@ -22,11 +21,7 @@ const CreateDepartmentModal: React.FC<CreateDepartmentModalProps> = ({ onClose, 
     setLoading(true);
 
     try {
-      const submitData = {
-        ...formData,
-        keywords: formData.keywords.split(',').map(k => k.trim()).filter(k => k)
-      };
-      await onSubmit(submitData);
+      await onSubmit(formData);
     } finally {
       setLoading(false);
     }
@@ -34,7 +29,8 @@ const CreateDepartmentModal: React.FC<CreateDepartmentModalProps> = ({ onClose, 
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    const nextValue = name === 'code' ? value.toUpperCase() : value;
+    setFormData(prev => ({ ...prev, [name]: nextValue }));
   };
 
   return (
@@ -118,22 +114,7 @@ const CreateDepartmentModal: React.FC<CreateDepartmentModalProps> = ({ onClose, 
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Palavras-chave para Categorização Automática
-            </label>
-            <input
-              type="text"
-              name="keywords"
-              value={formData.keywords}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Ex: carne, frango, peixe (separadas por vírgula)"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Produtos com essas palavras no nome serão automaticamente categorizados neste departamento
-            </p>
-          </div>
+          
 
           <div className="flex gap-3 pt-4">
             <button

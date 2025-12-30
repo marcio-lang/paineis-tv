@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Search, Edit, Trash2, Upload, Download, FileText, DollarSign, Package, Tv } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Plus, Search, Edit, Trash2, Upload, Download, FileText, DollarSign, Package } from 'lucide-react';
 import { toast } from 'sonner';
 import { Table } from '../../components/base/Table';
 import { Modal } from '../../components/base/Modal';
 import { Input } from '../../components/base/Input';
 import { Button } from '../../components/base/Button';
 import { ContainerLayout } from '../../components/layout/Layout';
-import { butcherService, ButcherProduct, ButcherConfig, CreateButcherProductData, UpdateButcherProductData } from '../../services/butcherService';
+import { butcherService, ButcherProduct, CreateButcherProductData, UpdateButcherProductData } from '../../services/butcherService';
+import { departmentService, Department } from '../../services/departmentService';
 
 export const ButcherAdminPage: React.FC = () => {
   console.log('🎯 ButcherAdminPage: Componente sendo inicializado');
@@ -18,15 +19,25 @@ export const ButcherAdminPage: React.FC = () => {
   
   const [products, setProducts] = useState<ButcherProduct[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<ButcherProduct[]>([]);
-  const [config, setConfig] = useState<ButcherConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [departmentsLoading, setDepartmentsLoading] = useState<boolean>(false);
+  const [departmentsError, setDepartmentsError] = useState<string | null>(null);
+  const [productDeptNameById, setProductDeptNameById] = useState<Record<string, string>>({});
+  const [productDeptIdById, setProductDeptIdById] = useState<Record<string, string>>({});
+  const [filterDepartmentId, setFilterDepartmentId] = useState<string>('');
+  
+  // Paginação
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(15);
   
   // Modais
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [showConfigModal, setShowConfigModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ButcherProduct | null>(null);
+  const [createDepartmentId, setCreateDepartmentId] = useState<string>('');
+  const [editDepartmentId, setEditDepartmentId] = useState<string>('');
   
   // Formulários
   const [createForm, setCreateForm] = useState<CreateButcherProductData>({
@@ -37,10 +48,6 @@ export const ButcherAdminPage: React.FC = () => {
     codigo: ''
   });
   const [editForm, setEditForm] = useState<UpdateButcherProductData>({});
-  const [configForm, setConfigForm] = useState({
-    title: '',
-    footer_text: ''
-  });
   
   // Removido upload de imagem de fundo
 
@@ -57,14 +64,25 @@ export const ButcherAdminPage: React.FC = () => {
         console.log('🚀 Iniciando carregamento de dados...');
         await loadProducts();
         console.log('🚀 loadProducts concluído');
-        await loadConfig();
-        console.log('🚀 loadConfig concluído');
       } catch (error) {
         console.error('🚀 Erro no useEffect principal:', error);
       }
     };
     
     carregarDados();
+    const loadDepartments = async () => {
+      try {
+        setDepartmentsLoading(true);
+        const data = await departmentService.getDepartments();
+        setDepartments(Array.isArray(data) ? data : []);
+      } catch (error) {
+        setDepartmentsError('Erro ao carregar departamentos');
+        console.error(error);
+      } finally {
+        setDepartmentsLoading(false);
+      }
+    };
+    loadDepartments();
   }, []);
 
   // Carregar dados
@@ -88,29 +106,32 @@ export const ButcherAdminPage: React.FC = () => {
     }
   };
 
-  // Carregar configuração
-  const loadConfig = async () => {
-    try {
-      const data = await butcherService.getConfig();
-      setConfig(data);
-      setConfigForm({
-        title: data?.title || '',
-        footer_text: data?.footer_text || ''
-      });
-    } catch (error) {
-      console.error('Erro ao carregar configuração:', error);
-      // Definir valores padrão em caso de erro
-      setConfig({
-        polling_interval: 10,
-        title: '',
-        footer_text: ''
-      } as ButcherConfig);
-      setConfigForm({
-        title: '',
-        footer_text: ''
-      });
-    }
-  };
+  // Mapear produtos -> departamento (via painéis)
+  useEffect(() => {
+    const buildMap = async () => {
+      const nameMap: Record<string, string> = {};
+      const idMap: Record<string, string> = {};
+      try {
+        for (const dep of departments) {
+          const panels = await departmentService.getDepartmentPanels(dep.id);
+          for (const p of (panels || [])) {
+            const productsInPanel = await departmentService.getPanelProducts(p.id);
+          for (const v of (productsInPanel || [])) {
+            if (!idMap[v.product_id]) {
+              idMap[v.product_id] = dep.id;
+              nameMap[v.product_id] = dep.name;
+            }
+          }
+          }
+        }
+      } catch (e) {
+        console.error('Erro ao mapear produtos para departamentos:', e);
+      }
+      setProductDeptIdById(idMap);
+      setProductDeptNameById(nameMap);
+    };
+    buildMap();
+  }, [departments, products]);
 
   // Filtrar produtos
   useEffect(() => {
@@ -119,20 +140,22 @@ export const ButcherAdminPage: React.FC = () => {
     console.log('🔍 useEffect filtro: products:', products);
     console.log('🔍 useEffect filtro: products.length:', products?.length || 0);
     
-    if (!searchTerm) {
-      setFilteredProducts(products);
-      console.log('✅ useEffect filtro: Sem filtro, usando todos os produtos');
-    } else {
-      const filtered = products.filter(product =>
+    let base = products;
+    if (searchTerm) {
+      base = base.filter(product =>
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.codigo.toLowerCase().includes(searchTerm.toLowerCase())
       );
-      setFilteredProducts(filtered);
-      console.log('✅ useEffect filtro: Produtos filtrados:', filtered);
-      console.log('✅ useEffect filtro: Quantidade filtrada:', filtered?.length || 0);
     }
+    if (filterDepartmentId) {
+      base = base.filter(p => (productDeptIdById[p.id] || '') === filterDepartmentId);
+    }
+    setFilteredProducts(base);
+    setCurrentPage(1); // Resetar página ao filtrar
+    console.log('✅ useEffect filtro: Produtos filtrados:', base);
+    console.log('✅ useEffect filtro: Quantidade filtrada:', base?.length || 0);
     console.log('🏁 useEffect filtro: Filtro concluído');
-  }, [searchTerm, products]);
+  }, [searchTerm, products, filterDepartmentId, productDeptIdById]);
 
   // Criar produto
   const handleCreate = async () => {
@@ -143,8 +166,24 @@ export const ButcherAdminPage: React.FC = () => {
     }
 
     try {
-      await butcherService.createProduct(createForm);
+      const created = await butcherService.createProduct(createForm);
       toast.success('Produto criado com sucesso!');
+
+      if (createDepartmentId) {
+        try {
+          const panels = await departmentService.getDepartmentPanels(createDepartmentId);
+          const defaultPanel = (panels || []).find(p => p.is_default) || (panels || [])[0];
+          if (defaultPanel) {
+            await departmentService.addProductToPanel(defaultPanel.id, created.id);
+            toast.success('Produto associado ao departamento selecionado');
+          } else {
+            toast.warning('Departamento sem painéis; produto criado sem associação');
+          }
+        } catch (assocErr) {
+          console.error('Erro ao associar produto ao departamento:', assocErr);
+          toast.error('Produto criado, mas falhou ao associar ao departamento');
+        }
+      }
       setShowCreateModal(false);
       setCreateForm({
         name: '',
@@ -153,6 +192,7 @@ export const ButcherAdminPage: React.FC = () => {
         is_active: true,
         codigo: ''
       });
+      setCreateDepartmentId('');
       loadProducts();
     } catch (error: any) {
       console.error('Erro ao criar produto:', error);
@@ -171,11 +211,18 @@ export const ButcherAdminPage: React.FC = () => {
     }
 
     try {
-      await butcherService.updateProduct(selectedProduct.id, editForm);
+      const payload = {
+        ...editForm,
+        department_id: editDepartmentId
+      };
+      
+      await butcherService.updateProduct(selectedProduct.id, payload);
+      
       toast.success('Produto atualizado com sucesso!');
       setShowEditModal(false);
       setSelectedProduct(null);
       setEditForm({});
+      setEditDepartmentId('');
       loadProducts();
     } catch (error: any) {
       console.error('Erro ao atualizar produto:', error);
@@ -201,18 +248,6 @@ export const ButcherAdminPage: React.FC = () => {
 
   // Removido upload de background
 
-  // Salvar configuração
-  const handleSaveConfig = async () => {
-    try {
-      await butcherService.updateConfig(configForm);
-      toast.success('Configuração salva com sucesso!');
-      setShowConfigModal(false);
-      loadConfig();
-    } catch (error: any) {
-      console.error('Erro ao salvar configuração:', error);
-      toast.error(error.response?.data?.error || 'Erro ao salvar configuração');
-    }
-  };
 
   // Exportar dados JSON
   const handleExport = async () => {
@@ -282,10 +317,11 @@ export const ButcherAdminPage: React.FC = () => {
         // Processar arquivo TXT com regex pattern do layout antigo
         const produtos = [];
         
-        // Regex pattern corrigida para extrair código (posições 7-9) e preço (posições 10-15)
-        // Formato: 010000[CODIGO][PRECO_6_DIGITOS][XXX][NOME] kg
-        // Exemplo: 010000175003399001ACEM kg -> codigo: 175, preço: 003399 -> R$ 33,99
-        const pattern = /^(\d{6})(\d{3})(\d{6})(\d{3})([A-Z\s\d]+)\s*kg/;
+        // Regex pattern corrigida para extrair código maior (posições 3-9) e preço (posições 10-15)
+        // Formato: XX[CODIGO_7_DIGITOS][PRECO_6_DIGITOS][XXX][NOME]
+        // Exemplo 1: 010043175006499000QUEIJO MUSSARELA kg PALIT -> codigo: 0043175, preço: 006499 -> R$ 64,99
+        // Exemplo 2: 010000175003899001ACEM kg -> codigo: 0000175, preço: 003899 -> R$ 38,99
+        const pattern = /^(\d{2})(\d{7})(\d{6})(\d{3})(.+)$/;
         const lines = text.split('\n');
         console.log('Total de linhas no arquivo:', lines.length);
         
@@ -295,22 +331,25 @@ export const ButcherAdminPage: React.FC = () => {
             console.log(`Processando linha ${i + 1}:`, linha);
             const match = linha.match(pattern);
             if (match) {
-              const prefixo = match[1]; // 010000 (ignorado)
-              const codigo = match[2]; // 3 dígitos do código
+              const prefixo = match[1]; // 01 (ignorado)
+              // Capturar código maior e remover zeros à esquerda para consistência
+              const codigo = parseInt(match[2]).toString(); 
               const precoStr6Digitos = match[3]; // 6 dígitos do preço
               const sufixo = match[4]; // 3 dígitos (ignorado)
-              let nome = match[5].trim(); // nome do produto
+              let nomeRaw = match[5].trim(); // nome do produto
               
               // Converter preço: usar os 6 dígitos completos (001899 = R$ 18,99)
               const precoEmCentavos = parseInt(precoStr6Digitos);
               const preco = precoEmCentavos / 100;
               
-
-              
               // === LIMPEZA E FORMATAÇÃO DO NOME ===
+              let nome = nomeRaw;
               
-              // 1. Remover números no início
-              nome = nome.replace(/^\d+/, '');
+              // 1. Remover "kg" (insensível a maiúsculas/minúsculas) se estiver no nome
+              nome = nome.replace(/\bkg\b/gi, '').trim();
+              
+              // 2. Remover números no início ou fim que pareçam códigos repetidos
+              nome = nome.replace(/^\d+/, '').replace(/\d+$/, '');
               
               // 2. Remover espaços extras
               nome = nome.trim();
@@ -411,17 +450,26 @@ export const ButcherAdminPage: React.FC = () => {
       is_active: product.is_active,
       codigo: product.codigo
     });
+    const prefill = async () => {
+      for (const dep of departments) {
+        try {
+          const panels = await departmentService.getDepartmentPanels(dep.id);
+          for (const p of (panels || [])) {
+            const productsInPanel = await departmentService.getPanelProducts(p.id);
+            if ((productsInPanel || []).some(v => v.product_id === product.id)) {
+              setEditDepartmentId(dep.id);
+              return;
+            }
+          }
+        } catch (_) {}
+      }
+      setEditDepartmentId('');
+    };
+    prefill();
     setShowEditModal(true);
   };
 
-  const openConfigModal = () => {
-    setShowConfigModal(true);
-  };
-
-  // Visualizar painel do açougue
-  const viewButcherPanel = () => {
-    window.open('/acougue-tv', '_blank');
-  };
+ 
 
   const columns = [
     {
@@ -447,6 +495,13 @@ export const ButcherAdminPage: React.FC = () => {
       label: 'Nome do Produto',
       render: (product: ButcherProduct) => (
         <div className="font-medium text-gray-900">{product.name}</div>
+      )
+    },
+    {
+      key: 'department',
+      label: 'Departamento',
+      render: (product: ButcherProduct) => (
+        <div className="text-gray-700">{productDeptNameById[product.id] || '—'}</div>
       )
     },
     {
@@ -502,9 +557,14 @@ export const ButcherAdminPage: React.FC = () => {
     }
   ];
 
-  const stats = butcherService.getProductStats(products || []);
-  const availablePositions = butcherService.getAvailablePositions(products || []);
+  const stats = butcherService.getProductStats(filteredProducts || []);
 
+
+  // Dados paginados para a tabela
+  const paginatedProducts = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredProducts.slice(startIndex, startIndex + pageSize);
+  }, [filteredProducts, currentPage, pageSize]);
 
   return (
     <ContainerLayout animation="fade">
@@ -516,14 +576,6 @@ export const ButcherAdminPage: React.FC = () => {
             <p className="text-gray-600 dark:text-gray-400">Gerencie produtos e configurações do painel do açougue</p>
           </div>
           <div className="flex space-x-3">
-            <Button variant="outline" onClick={viewButcherPanel}>
-              <Tv className="h-4 w-4 mr-2" />
-              Ver Painel TV
-            </Button>
-            <Button variant="outline" onClick={openConfigModal}>
-              <Upload className="h-4 w-4 mr-2" />
-              Configurações
-            </Button>
             <Button onClick={() => setShowCreateModal(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Novo Produto
@@ -621,8 +673,23 @@ export const ButcherAdminPage: React.FC = () => {
           </div>
           <Button variant="outline" onClick={handleClearData} className="text-red-600 border-red-300 hover:bg-red-50">
             <Trash2 className="h-4 w-4 mr-2" />
-            Limpar Dados
-          </Button>
+        Limpar Dados
+      </Button>
+      <div className="ml-auto w-full sm:w-auto">
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Filtrar por Departamento
+        </label>
+        <select
+          value={filterDepartmentId}
+          onChange={(e) => setFilterDepartmentId(e.target.value)}
+          className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        >
+          <option value="">Todos os departamentos</option>
+          {departments.map(dep => (
+            <option key={dep.id} value={dep.id}>{dep.name}</option>
+          ))}
+        </select>
+      </div>
         </div>
       </div>
 
@@ -643,10 +710,16 @@ export const ButcherAdminPage: React.FC = () => {
       {/* Tabela */}
       <div className="bg-white rounded-lg shadow">
         <Table
-          data={filteredProducts}
+          data={paginatedProducts}
           columns={columns}
           loading={loading}
           emptyMessage="Nenhum produto encontrado"
+          pagination={{
+            current: currentPage,
+            pageSize: pageSize,
+            total: filteredProducts.length,
+            onChange: (page) => setCurrentPage(page)
+          }}
         />
       </div>
 
@@ -682,22 +755,34 @@ export const ButcherAdminPage: React.FC = () => {
             placeholder="0.00"
           />
 
+          <Input
+            label="Posição (1-100)"
+            type="number"
+            min="1"
+            max="100"
+            value={createForm.position}
+            onChange={(e) => setCreateForm({ ...createForm, position: parseInt(e.target.value) || 1 })}
+            placeholder="Digite a posição no grid"
+          />
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Posição no Painel
+              Departamento
             </label>
             <select
-              value={createForm.position}
-              onChange={(e) => setCreateForm({ ...createForm, position: parseInt(e.target.value) })}
+              value={createDepartmentId}
+              onChange={(e) => setCreateDepartmentId(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              {availablePositions.map(pos => (
-                <option key={pos} value={pos}>
-                  Posição {pos}
+              <option value="">{departmentsLoading ? 'Carregando...' : 'Selecione um departamento'}</option>
+              {departments.map(dep => (
+                <option key={dep.id} value={dep.id}>
+                  {dep.name}
                 </option>
               ))}
             </select>
           </div>
+
 
           <div className="flex items-center">
             <input
@@ -758,22 +843,34 @@ export const ButcherAdminPage: React.FC = () => {
             placeholder="0.00"
           />
 
+          <Input
+            label="Posição (1-100)"
+            type="number"
+            min="1"
+            max="100"
+            value={editForm.position || 1}
+            onChange={(e) => setEditForm({ ...editForm, position: parseInt(e.target.value) || 1 })}
+            placeholder="Digite a posição no grid"
+          />
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Posição no Painel
+              Departamento
             </label>
             <select
-              value={editForm.position || 1}
-              onChange={(e) => setEditForm({ ...editForm, position: parseInt(e.target.value) })}
+              value={editDepartmentId}
+              onChange={(e) => setEditDepartmentId(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              {[...availablePositions, selectedProduct?.position].filter(Boolean).sort((a, b) => a! - b!).map(pos => (
-                <option key={pos} value={pos}>
-                  Posição {pos}
+              <option value="">{departmentsLoading ? 'Carregando...' : 'Selecione um departamento'}</option>
+              {departments.map(dep => (
+                <option key={dep.id} value={dep.id}>
+                  {dep.name}
                 </option>
               ))}
             </select>
           </div>
+
 
           <div className="flex items-center">
             <input
@@ -802,54 +899,7 @@ export const ButcherAdminPage: React.FC = () => {
         </div>
       </Modal>
 
-      {/* Modal de Configurações */}
-      <Modal
-        isOpen={showConfigModal}
-        onClose={() => setShowConfigModal(false)}
-        title="Configurações do Painel"
-        size="lg"
-      >
-        <div className="space-y-6">
-          {/* Seção de upload de background removida */}
-
-          {/* Configurações de Texto */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-medium text-gray-900">Textos do Painel</h3>
-            
-            <Input
-              label="Título Principal"
-              value={configForm.title}
-              onChange={(e) => setConfigForm({ ...configForm, title: e.target.value })}
-              placeholder="Ex: Açougue Premium"
-            />
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Texto do Rodapé
-              </label>
-              <textarea
-                value={configForm.footer_text}
-                onChange={(e) => setConfigForm({ ...configForm, footer_text: e.target.value })}
-                placeholder="Ex: Horário de funcionamento: Segunda a Sábado das 7h às 19h"
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end space-x-3 pt-4">
-            <Button
-              variant="outline"
-              onClick={() => setShowConfigModal(false)}
-            >
-              Cancelar
-            </Button>
-            <Button onClick={handleSaveConfig}>
-              Salvar Configurações
-            </Button>
-          </div>
-        </div>
-      </Modal>
+ 
       </div>
     </ContainerLayout>
   );

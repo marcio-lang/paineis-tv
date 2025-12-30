@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Package, Settings, Eye, Trash2, Edit, Users, Monitor, Zap } from 'lucide-react';
+import { Plus, Package, Settings, Eye, Trash2, Edit, Users, Monitor } from 'lucide-react';
 import { toast } from 'sonner';
 import { departmentService, Department, DepartmentPanel } from '../../services/departmentService';
 import CreateDepartmentModal from '../../components/departments/CreateDepartmentModal';
@@ -70,13 +70,21 @@ const DepartamentosPage: React.FC = () => {
 
   const handleCreateDepartment = async (data: any) => {
     try {
+      const nextCode = typeof data.code === 'string' ? data.code.trim().toUpperCase() : '';
+      if (nextCode) {
+        const exists = departments.some(d => (d.code || '').trim().toUpperCase() === nextCode);
+        if (exists) {
+          toast.error('Já existe um departamento com este código');
+          return;
+        }
+      }
       await departmentService.createDepartment(data);
       toast.success('Departamento criado com sucesso!');
       setShowCreateDepartment(false);
       loadDepartments();
     } catch (error: any) {
       console.error('Erro ao criar departamento:', error);
-      toast.error(error.response?.data?.error || 'Erro ao criar departamento');
+      toast.error(error?.message || 'Erro ao criar departamento');
     }
   };
 
@@ -88,8 +96,29 @@ const DepartamentosPage: React.FC = () => {
   const handleUpdateDepartment = async (data: any) => {
     if (!editingDepartment) return;
     
+    console.log('handleUpdateDepartment - Dados recebidos:', data);
+    console.log('handleUpdateDepartment - Departamento atual:', editingDepartment);
+
     try {
-      await departmentService.updateDepartment(editingDepartment.id, data);
+      // Simplificação: Enviar todos os campos editáveis diretamente
+      // O backend já verifica se houve mudança antes de validar duplicidade
+      const payload: any = {
+        name: typeof data.name === 'string' ? data.name.trim() : editingDepartment.name,
+        description: typeof data.description === 'string' ? data.description : (editingDepartment.description || ''),
+        color: typeof data.color === 'string' ? data.color.trim() : (editingDepartment.color || '#3B82F6'),
+        active: editingDepartment.active // Manter estado ativo atual
+      };
+
+      const nextCodeRaw = typeof data.code === 'string' ? data.code : editingDepartment.code;
+      const nextCode = nextCodeRaw ? nextCodeRaw.trim().toUpperCase() : '';
+      
+      if (nextCode) {
+        payload.code = nextCode;
+      }
+
+      console.log('Enviando payload completo:', payload);
+
+      await departmentService.updateDepartment(editingDepartment.id, payload);
       toast.success('Departamento atualizado com sucesso!');
       setShowEditDepartment(false);
       setEditingDepartment(null);
@@ -106,6 +135,14 @@ const DepartamentosPage: React.FC = () => {
     }
 
     try {
+      const panels = await departmentService.getDepartmentPanels(department.id);
+      for (const p of (panels || [])) {
+        try {
+          await departmentService.deleteDepartmentPanel(p.id);
+        } catch (e) {
+          console.error('Erro ao excluir painel do departamento:', e);
+        }
+      }
       await departmentService.deleteDepartment(department.id);
       toast.success('Departamento excluído com sucesso!');
       
@@ -180,20 +217,6 @@ const DepartamentosPage: React.FC = () => {
     setShowManageProducts(true);
   };
 
-  const handleAutoCategorizeDepartment = async () => {
-    if (!selectedDepartment) return;
-
-    try {
-      const result = await departmentService.autoCategorizeProducts(selectedDepartment.id);
-      toast.success(`${result.categorized_count} produtos categorizados automaticamente para ${result.department}`);
-      
-      // Recarregar painéis para atualizar contadores
-      loadDepartmentPanels(selectedDepartment.id);
-    } catch (error: any) {
-      console.error('Erro na categorização automática:', error);
-      toast.error(error.response?.data?.error || 'Erro na categorização automática');
-    }
-  };
 
   const handleViewPanel = (panel: DepartmentPanel) => {
     if (!selectedDepartment) return;
@@ -257,7 +280,7 @@ const DepartamentosPage: React.FC = () => {
           <div className="bg-white p-6 rounded-lg shadow">
             <div className="flex items-center">
               <div className="p-2 bg-yellow-100 rounded-lg">
-                <Zap className="h-6 w-6 text-yellow-600" />
+                <Monitor className="h-6 w-6 text-yellow-600" />
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Painéis Ativos</p>
@@ -360,13 +383,7 @@ const DepartamentosPage: React.FC = () => {
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <button
-                        onClick={handleAutoCategorizeDepartment}
-                        className="bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 flex items-center gap-2 text-sm"
-                      >
-                        <Zap className="h-4 w-4" />
-                        Auto Categorizar
-                      </button>
+                    
                       <button
                         onClick={() => setShowCreatePanel(true)}
                         className="bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 text-sm"

@@ -21,8 +21,9 @@ export interface CreateButcherProductData {
   codigo: string;
   name: string;
   price: number;
-  position: number;
+  position?: number;
   is_active?: boolean;
+  department_id?: string;
 }
 
 export interface UpdateButcherProductData {
@@ -31,6 +32,7 @@ export interface UpdateButcherProductData {
   price?: number;
   position?: number;
   is_active?: boolean;
+  department_id?: string;
 }
 
 class ButcherService {
@@ -154,8 +156,8 @@ class ButcherService {
       errors.push('Preço deve ser um valor positivo');
     }
 
-    if ('position' in data && (data.position === undefined || data.position < 1 || data.position > 24)) {
-      errors.push('Posição deve ser entre 1 e 24');
+    if ('position' in data && (data.position === undefined || data.position < 1 || data.position > 100)) {
+      errors.push('Posição deve ser entre 1 e 100');
     }
 
     return errors;
@@ -184,8 +186,8 @@ class ButcherService {
       .filter(p => p.is_active)
       .map(p => p.position);
     
-    const allPositions = Array.from({ length: 24 }, (_, i) => i + 1);
-    return allPositions.filter(pos => !usedPositions.includes(pos));
+    const allPositions = Array.from({ length: 100 }, (_, i) => i + 1);
+    return allPositions.filter(pos => !usedPositions.includes(pos)).slice(0, 24); // Sugerir apenas as primeiras 24 livres
   }
 
   // Estatísticas

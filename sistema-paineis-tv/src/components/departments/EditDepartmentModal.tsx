@@ -13,22 +13,18 @@ const EditDepartmentModal: React.FC<EditDepartmentModalProps> = ({ department, o
     name: '',
     code: '',
     description: '',
-    color: '#3B82F6',
-    keywords: ''
+    color: '#3B82F6'
   });
 
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (department) {
-      const keywordsString = department.keywords ? department.keywords.join(', ') : '';
-      
       setFormData({
         name: department.name || '',
         code: department.code || '',
         description: department.description || '',
-        color: department.color || '#3B82F6',
-        keywords: keywordsString
+        color: department.color || '#3B82F6'
       });
     }
   }, [department]);
@@ -38,14 +34,7 @@ const EditDepartmentModal: React.FC<EditDepartmentModalProps> = ({ department, o
     setLoading(true);
 
     try {
-      const keywordsArray = formData.keywords.split(',').map(k => k.trim()).filter(k => k);
-      
-      const submitData = {
-        ...formData,
-        keywords: keywordsArray
-      };
-      
-      await onSubmit(submitData);
+      await onSubmit(formData);
     } finally {
       setLoading(false);
     }
@@ -138,22 +127,7 @@ const EditDepartmentModal: React.FC<EditDepartmentModalProps> = ({ department, o
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Palavras-chave para Categorização Automática
-            </label>
-            <input
-              type="text"
-              name="keywords"
-              value={formData.keywords}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Ex: carne, frango, peixe (separadas por vírgula)"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Produtos com essas palavras no nome serão automaticamente categorizados neste departamento
-            </p>
-          </div>
+          
 
           <div className="flex gap-3 pt-4">
             <button

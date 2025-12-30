@@ -103,7 +103,7 @@ export default defineConfig({
     host: '0.0.0.0',
     proxy: {
       '/api': {
-        target: process.env.VITE_DEV_PROXY_TARGET || 'http://localhost:5050',
+        target: process.env.VITE_DEV_PROXY_TARGET || 'http://localhost:5001',
         changeOrigin: true,
         secure: false,
       }

@@ -271,11 +271,12 @@ class PanelService {
     const grid: (PanelProduct | null)[] = new Array(24).fill(null);
     
     // Colocar cada produto na sua posição específica (posição 1-24 -> índice 0-23)
+    // Posições acima de 24 são permitidas no banco mas não aparecem no grid fixo da TV
     products.forEach(product => {
       if (product.posicao >= 1 && product.posicao <= 24) {
         grid[product.posicao - 1] = product;
-      } else {
-        // Se não tem posição definida ou está fora do range, colocar na primeira posição livre
+      } else if (!product.posicao || product.posicao > 24) {
+        // Se não tem posição definida ou está acima de 24, colocar na primeira posição livre do grid 1-24
         const freeIndex = grid.findIndex(slot => slot === null);
         if (freeIndex !== -1) {
           grid[freeIndex] = product;
@@ -301,7 +302,7 @@ class PanelService {
       totalValue,
       averagePrice,
       occupiedPositions: active.length,
-      availablePositions: 24 - active.length,
+      availablePositions: 100 - active.length, // Limite flexível de 100
     };
   }
 

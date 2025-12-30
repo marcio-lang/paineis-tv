@@ -44,7 +44,8 @@ export interface ProductPanelAssociation {
 }
 
 export interface PanelProductView {
-  id: string;
+  id: string; // ID da associação
+  product_id: string; // ID do produto
   codigo: string;
   name: string;
   price: number;
@@ -157,6 +158,13 @@ class DepartmentService {
 
   async removeProductFromPanel(panelId: string, productId: string): Promise<{ message: string }> {
     const response = await api.delete(`/panels/${panelId}/products/${productId}`);
+    return response;
+  }
+
+  async reorderPanelProducts(panelId: string, productOrders: { product_id: string; position: number }[]): Promise<{ message: string }> {
+    const response = await api.post(`/panels/${panelId}/products/reorder`, {
+      product_orders: productOrders
+    });
     return response;
   }
 

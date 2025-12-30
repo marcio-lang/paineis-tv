@@ -6,7 +6,8 @@ from urllib.request import Request, urlopen
 
 def parse_items(txt_path: str):
     text = Path(txt_path).read_text(encoding='latin-1', errors='ignore')
-    pat = re.compile(r'^(\d{6})(\d{3})(\d{6})(\d{3})([A-Z\s\d]+)\s*kg', re.IGNORECASE)
+    # Regex pattern corrigida para extrair código maior (posições 3-9) e preço (posições 10-15)
+    pat = re.compile(r'^(\d{2})(\d{7})(\d{6})(\d{3})(.+)$', re.IGNORECASE)
     produtos = []
     for ln in text.splitlines():
         ln = ln.rstrip()
@@ -14,6 +15,8 @@ def parse_items(txt_path: str):
         if m:
             preco = round(int(m.group(3)) / 100, 2)
             nome_raw = m.group(5).strip()
+            # Limpar "kg" do nome
+            nome_raw = re.sub(r'\bkg\b', '', nome_raw, flags=re.IGNORECASE).strip()
         else:
             if len(ln) < 20:
                 continue
@@ -25,8 +28,10 @@ def parse_items(txt_path: str):
             name_part = ln[18:]
             idx = name_part.lower().find('kg')
             nome_raw = (name_part[:idx] if idx != -1 else name_part).strip()
-        cm = re.search(r'\bKG\b\s*0*(\d{3,6})\s*$', ln, re.IGNORECASE)
-        codigo = (cm.group(1) if cm else (m.group(2) if m else ln[6:9]))
+        
+        cm = re.search(r'\bKG\b\s*0*(\d{3,7})\s*$', ln, re.IGNORECASE)
+        # Usar grupo 2 (7 dígitos) convertido para int para remover zeros à esquerda
+        codigo = (cm.group(1) if cm else (str(int(m.group(2))) if m else ln[6:9]))
         nome = re.sub(r'(?:\s*[0-9]{4,})+$', '', nome_raw.strip())
         nome = re.sub(r'\s+', ' ', nome)
         nome = nome.title()

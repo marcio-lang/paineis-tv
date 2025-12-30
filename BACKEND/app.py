@@ -166,8 +166,8 @@ class User(db.Model):
             'email': self.email,
             'role': self.role,
             'active': self.active,
-            'created_at': self.created_at.isoformat(),
-            'updated_at': self.updated_at.isoformat()
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
 
 # Novos modelos para o painel de açougue
@@ -182,13 +182,16 @@ class ButcherProduct(db.Model):
     created_at = db.Column(db.DateTime, default=get_brazil_now)
     updated_at = db.Column(db.DateTime, default=get_brazil_now, onupdate=get_brazil_now)
 
+OLD_DEFAULT_FOOTER_TEXT = 'Horário de funcionamento: Segunda a Sábado das 7h às 19h'
+DEFAULT_FOOTER_TEXT = 'Horário de funcionamento: Segunda a Sábado das 7h às 22h'
+
 class ButcherPanelConfig(db.Model):
     __tablename__ = 'butcher_panel_config'
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     polling_interval = db.Column(db.Integer, default=10)  # Intervalo em segundos
     title = db.Column(db.String(100), default='AÇOUGUE PREMIUM')  # Título do painel
     subtitle = db.Column(db.String(100), default='Carnes Selecionadas')  # Subtítulo
-    footer_text = db.Column(db.String(255), default='Horário de funcionamento: Segunda a Sábado das 7h às 19h')  # Texto do rodapé
+    footer_text = db.Column(db.String(255), default=DEFAULT_FOOTER_TEXT)  # Texto do rodapé
     created_at = db.Column(db.DateTime, default=get_brazil_now)
     updated_at = db.Column(db.DateTime, default=get_brazil_now, onupdate=get_brazil_now)
 
@@ -274,8 +277,8 @@ class Department(db.Model):
             'icon': self.icon,
             'keywords': keywords_list,
             'active': self.active,
-            'created_at': self.created_at.isoformat(),
-            'updated_at': self.updated_at.isoformat(),
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
             'panels_count': len(self.panels) if self.panels else 0
         }
 
@@ -318,9 +321,9 @@ class DepartmentPanel(db.Model):
             'active': self.active,
             'is_default': self.is_default,
             'display_order': self.display_order,
-            'created_at': self.created_at.isoformat(),
-            'updated_at': self.updated_at.isoformat(),
-            'products_count': len([assoc for assoc in self.product_associations if assoc.active_in_panel and assoc.product and assoc.product.ativo]) if self.product_associations else 0
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'products_count': len([assoc for assoc in self.product_associations if assoc.product and assoc.product.ativo and assoc.active_in_panel]) if self.product_associations else 0
         }
 
 class ProductPanelAssociation(db.Model):
@@ -350,8 +353,8 @@ class ProductPanelAssociation(db.Model):
             'panel_id': self.panel_id,
             'position_override': self.position_override,
             'active_in_panel': self.active_in_panel,
-            'created_at': self.created_at.isoformat(),
-            'updated_at': self.updated_at.isoformat(),
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
             'product': self.product.to_dict() if self.product else None
         }
 
@@ -361,11 +364,15 @@ def butcher_product_to_dict(self):
         'id': self.id,
         'codigo': self.codigo,
         'nome': self.nome,
+        'name': self.nome, # Mapeamento para frontend
         'preco': float(self.preco),
+        'price': float(self.preco), # Mapeamento para frontend
         'posicao': self.posicao,
+        'position': self.posicao, # Mapeamento para frontend
         'ativo': self.ativo,
-        'created_at': self.created_at.isoformat(),
-        'updated_at': self.updated_at.isoformat()
+        'is_active': self.ativo, # Mapeamento para frontend
+        'created_at': self.created_at.isoformat() if self.created_at else None,
+        'updated_at': self.updated_at.isoformat() if self.updated_at else None
     }
 
 # Adicionar método to_dict ao modelo ButcherProduct
@@ -503,40 +510,50 @@ def register():
 @app.route('/api/auth/login', methods=['POST'])
 def login():
     """Fazer login do usuário"""
-    data = request.get_json()
-    
-    if not data or not data.get('email') or not data.get('password'):
+    try:
+        data = request.get_json()
+        
+        if not data or not data.get('email') or not data.get('password'):
+            return jsonify({
+                'success': False,
+                'message': 'Email e senha são obrigatórios'
+            }), 400
+        
+        # Buscar usuário
+        user = User.query.filter_by(email=data['email'].lower()).first()
+        
+        if not user or not user.check_password(data['password']):
+            return jsonify({
+                'success': False,
+                'message': 'Email ou senha inválidos'
+            }), 401
+        
+        if not user.active:
+            return jsonify({
+                'success': False,
+                'message': 'Usuário inativo'
+            }), 401
+        
+        # Gerar token
+        token = user.generate_token()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Login realizado com sucesso',
+            'data': {
+                'user': user.to_dict(),
+                'token': token
+            }
+        })
+    except Exception as e:
+        import traceback
+        print(f"[ERROR] Erro no login: {str(e)}")
+        print(traceback.format_exc())
         return jsonify({
             'success': False,
-            'message': 'Email e senha são obrigatórios'
-        }), 400
-    
-    # Buscar usuário
-    user = User.query.filter_by(email=data['email'].lower()).first()
-    
-    if not user or not user.check_password(data['password']):
-        return jsonify({
-            'success': False,
-            'message': 'Email ou senha inválidos'
-        }), 401
-    
-    if not user.active:
-        return jsonify({
-            'success': False,
-            'message': 'Usuário inativo'
-        }), 401
-    
-    # Gerar token
-    token = user.generate_token()
-    
-    return jsonify({
-        'success': True,
-        'message': 'Login realizado com sucesso',
-        'data': {
-            'user': user.to_dict(),
-            'token': token
-        }
-    })
+            'message': f'Erro interno no servidor: {str(e)}',
+            'traceback': traceback.format_exc()
+        }), 500
 
 @app.route('/api/auth/me', methods=['GET'])
 @require_auth
@@ -720,8 +737,8 @@ def get_panels():
         'name': panel.name,
         'layout_type': panel.layout_type,
         'fixed_url': panel.fixed_url,
-        'created_at': panel.created_at.isoformat(),
-        'updated_at': panel.updated_at.isoformat(),
+        'created_at': panel.created_at.isoformat() if panel.created_at else None,
+        'updated_at': panel.updated_at.isoformat() if panel.updated_at else None,
         'actions_count': len([action for action in panel.actions 
                              if action.start_date.replace(tzinfo=BRAZIL_TZ) <= now and action.end_date.replace(tzinfo=BRAZIL_TZ) >= now]),
         'media_count': sum(len(action.images) for action in panel.actions)
@@ -765,8 +782,8 @@ def get_panel(panel_id):
         'name': panel.name,
         'layout_type': panel.layout_type,
         'fixed_url': panel.fixed_url,
-        'created_at': panel.created_at.isoformat(),
-        'updated_at': panel.updated_at.isoformat(),
+        'created_at': panel.created_at.isoformat() if panel.created_at else None,
+        'updated_at': panel.updated_at.isoformat() if panel.updated_at else None,
         'actions': [{
             'id': action.id,
             'name': action.name,
@@ -830,8 +847,8 @@ def get_panel_by_url(fixed_url):
         'name': panel.name,
         'layout_type': panel.layout_type,
         'fixed_url': panel.fixed_url,
-        'created_at': panel.created_at.isoformat(),
-        'updated_at': panel.updated_at.isoformat()
+        'created_at': panel.created_at.isoformat() if panel.created_at else None,
+        'updated_at': panel.updated_at.isoformat() if panel.updated_at else None
     })
 
 # Rotas da API - Ações
@@ -1315,8 +1332,8 @@ def get_butcher_products():
         'price': float(product.preco),  # Mapeamento correto para frontend
         'position': product.posicao,  # Mapeamento correto para frontend
         'is_active': product.ativo,  # Mapeamento correto para frontend
-        'created_at': product.created_at.isoformat(),
-        'updated_at': product.updated_at.isoformat()
+        'created_at': product.created_at.isoformat() if product.created_at else None,
+        'updated_at': product.updated_at.isoformat() if product.updated_at else None
     } for product in products])
 
 @app.route('/api/acougue/produtos/ativos', methods=['GET'])
@@ -1330,8 +1347,8 @@ def get_active_butcher_products():
         'price': float(product.preco),  # Mapeamento correto para frontend
         'position': product.posicao,  # Mapeamento correto para frontend
         'is_active': product.ativo,  # Mapeamento correto para frontend
-        'created_at': product.created_at.isoformat(),
-        'updated_at': product.updated_at.isoformat()
+        'created_at': product.created_at.isoformat() if product.created_at else None,
+        'updated_at': product.updated_at.isoformat() if product.updated_at else None
     } for product in products])
 
 @app.route('/api/acougue/produtos', methods=['POST'])
@@ -1350,19 +1367,46 @@ def create_butcher_product():
         if not codigo:
             return jsonify({'error': 'Código do produto é obrigatório'}), 400
         
-        # Validar posição (deve estar entre 1 e 18 para grid 6x3)
-        if not position or position < 1 or position > 18:
-            return jsonify({'error': 'Posição deve estar entre 1 e 18 (grid 6x3)'}), 400
+        # Validar posição (deve estar entre 1 e 100 para flexibilidade, grid TV usa 1-24)
+        if position is not None:
+            try:
+                position = int(position)
+            except (TypeError, ValueError):
+                return jsonify({'error': 'Posição inválida'}), 400
+                
+            if position < 1 or position > 100:
+                return jsonify({'error': 'Posição deve estar entre 1 e 100'}), 400
+        else:
+            # Se não informada, pegar a próxima disponível
+            posicoes_ocupadas = [p.posicao for p in ButcherProduct.query.all()]
+            position = 1
+            while position in posicoes_ocupadas:
+                position += 1
+            
+            # Se ultrapassar 100, apenas usar 100 (como fallback)
+            if position > 100:
+                position = 100
         
         # Verificar se já existe produto com o mesmo código
         existing = ButcherProduct.query.filter_by(codigo=codigo).first()
         if existing:
             return jsonify({'error': f'Já existe um produto com o código {codigo}'}), 400
         
-        # Verificar se já existe produto na posição
-        existing_position = ButcherProduct.query.filter_by(posicao=position, ativo=True).first()
+        # Verificar se já existe produto na posição para remanejar (independente de estar ativo)
+        existing_position = ButcherProduct.query.filter_by(posicao=position).first()
         if existing_position:
-            return jsonify({'error': f'Já existe um produto na posição {position}'}), 400
+            # Encontrar próxima posição disponível para o produto que estava lá
+            posicoes_ocupadas = [p.posicao for p in ButcherProduct.query.all()]
+            nova_pos = 1
+            while nova_pos in posicoes_ocupadas or nova_pos == position:
+                nova_pos += 1
+            
+            if nova_pos <= 100:
+                print(f"[AÇOUGUE] Remanejando produto {existing_position.id} da posição {position} para {nova_pos}")
+                existing_position.posicao = nova_pos
+                existing_position.updated_at = get_brazil_now()
+            else:
+                return jsonify({'error': f'A posição {position} está ocupada e não há mais espaço no grid (limite 100)'}), 400
         
         product = ButcherProduct(
             codigo=codigo,
@@ -1381,8 +1425,8 @@ def create_butcher_product():
             'price': float(product.preco),
             'position': product.posicao,
             'is_active': product.ativo,
-            'created_at': product.created_at.isoformat(),
-            'updated_at': product.updated_at.isoformat()
+            'created_at': product.created_at.isoformat() if product.created_at else None,
+            'updated_at': product.updated_at.isoformat() if product.updated_at else None
         }), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 400
@@ -1406,14 +1450,24 @@ def update_butcher_product(product_id):
             if existing and existing.id != product_id:
                 return jsonify({'error': f'Já existe um produto com o código {codigo}'}), 400
         
-        # Se mudou a posição, validar e verificar se não há conflito
+        # Se mudou a posição, validar e realizar troca se necessário
         if position is not None and position != product.posicao:
-            # Validar posição (deve estar entre 1 e 18 para grid 6x3)
-            if position < 1 or position > 18:
-                return jsonify({'error': 'Posição deve estar entre 1 e 18 (grid 6x3)'}), 400
-            existing = ButcherProduct.query.filter_by(posicao=position, ativo=True).first()
-            if existing and existing.id != product_id:
-                return jsonify({'error': f'Já existe um produto na posição {position}'}), 400
+            # Validar posição (deve estar entre 1 e 100 para flexibilidade, grid TV usa 1-24)
+            try:
+                position = int(position)
+            except (TypeError, ValueError):
+                return jsonify({'error': 'Posição inválida'}), 400
+                
+            if position < 1 or position > 100:
+                return jsonify({'error': 'Posição deve estar entre 1 e 100'}), 400
+                
+            # Verificar se já existe produto na posição para realizar a troca (independente de estar ativo)
+            existing = ButcherProduct.query.filter_by(posicao=position).first()
+            if existing and existing.id != product.id:
+                # Trocar as posições para evitar conflito
+                print(f"[AÇOUGUE] Trocando posição do produto {existing.id} de {position} para {product.posicao}")
+                existing.posicao = product.posicao
+                existing.updated_at = get_brazil_now()
         
         if codigo is not None:
             product.codigo = codigo
@@ -1425,6 +1479,44 @@ def update_butcher_product(product_id):
             product.posicao = position
         if is_active is not None:
             product.ativo = is_active
+            
+        # Atualizar associação de departamento se fornecido
+        if department_id:
+            try:
+                # 1. Encontrar painel alvo
+                target_panel = DepartmentPanel.query.filter_by(department_id=department_id, is_default=True).first()
+                if not target_panel:
+                    target_panel = DepartmentPanel.query.filter_by(department_id=department_id).first()
+                
+                if target_panel:
+                    # 2. Verificar se já existe associação com este painel
+                    existing_assoc = ProductPanelAssociation.query.filter_by(
+                        product_id=product.id,
+                        panel_id=target_panel.id
+                    ).first()
+                    
+                    if not existing_assoc:
+                        # Criar nova associação
+                        new_assoc = ProductPanelAssociation(
+                            product_id=product.id,
+                            panel_id=target_panel.id,
+                            active_in_panel=True
+                        )
+                        db.session.add(new_assoc)
+                        print(f"[AÇOUGUE] Produto {product.id} associado ao painel {target_panel.id}")
+                    
+                    # 3. Remover de OUTROS departamentos (opcional, mas recomendado para consistência visual)
+                    # Buscar todas as associações deste produto
+                    all_assocs = ProductPanelAssociation.query.filter_by(product_id=product.id).all()
+                    for assoc in all_assocs:
+                        if assoc.panel_id != target_panel.id:
+                            # Verificar se o painel pertence a OUTRO departamento
+                            other_panel = DepartmentPanel.query.get(assoc.panel_id)
+                            if other_panel and other_panel.department_id != department_id:
+                                db.session.delete(assoc)
+                                print(f"[AÇOUGUE] Associação removida do painel {other_panel.id} (outro departamento)")
+            except Exception as e:
+                print(f"[AÇOUGUE] Erro ao atualizar departamento: {e}")
         
         product.updated_at = get_brazil_now()
         db.session.commit()
@@ -1436,8 +1528,8 @@ def update_butcher_product(product_id):
             'price': float(product.preco),
             'position': product.posicao,
             'is_active': product.ativo,
-            'created_at': product.created_at.isoformat(),
-            'updated_at': product.updated_at.isoformat()
+            'created_at': product.created_at.isoformat() if product.created_at else None,
+            'updated_at': product.updated_at.isoformat() if product.updated_at else None
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 400
@@ -1449,6 +1541,46 @@ def delete_butcher_product(product_id):
     db.session.commit()
     return '', 204
 
+@app.route('/api/acougue/produtos/remove-duplicates', methods=['POST'])
+def remove_butcher_duplicates():
+    data = request.get_json() or {}
+    name = (data.get('name') or '').strip()
+    criteria = (data.get('criteria') or 'highest_price').strip()
+    if not name:
+        return jsonify({'error': 'Nome é obrigatório'}), 400
+    from unicodedata import normalize, combining
+    import re
+    def _norm(s):
+        if not s:
+            return ''
+        s = normalize('NFD', s)
+        s = ''.join(c for c in s if not combining(c))
+        s = s.lower()
+        s = re.sub(r'\s+', ' ', s).strip()
+        return s
+    key = _norm(name)
+    products = ButcherProduct.query.all()
+    group = [p for p in products if _norm(p.nome) == key]
+    if len(group) <= 1:
+        return jsonify({'message': 'Nenhum duplicado encontrado', 'kept': [p.id for p in group], 'removed': []})
+    def _price(p):
+        try:
+            return float(p.preco or 0)
+        except Exception:
+            return 0.0
+    if criteria == 'latest_created':
+        primary = max(group, key=lambda p: p.created_at or get_brazil_now())
+    else:
+        primary = max(group, key=_price)
+    removed = []
+    for p in group:
+        if p.id == primary.id:
+            continue
+        ProductPanelAssociation.query.filter_by(product_id=p.id).delete()
+        db.session.delete(p)
+        removed.append(p.id)
+    db.session.commit()
+    return jsonify({'message': 'Duplicados removidos', 'kept': primary.id, 'removed': removed})
 # Rota removida: upload de imagem de fundo do açougue (descontinuado)
 
 @app.route('/api/acougue/config', methods=['GET'])
@@ -1457,6 +1589,11 @@ def get_butcher_config():
     if not config:
         config = ButcherPanelConfig()
         db.session.add(config)
+        db.session.commit()
+
+    if not (config.footer_text or '').strip() or config.footer_text == OLD_DEFAULT_FOOTER_TEXT:
+        config.footer_text = DEFAULT_FOOTER_TEXT
+        config.updated_at = get_brazil_now()
         db.session.commit()
     
     return jsonify({
@@ -1608,16 +1745,24 @@ def import_from_txt_path():
         if not os.path.exists(path):
             return jsonify({'error': 'Arquivo não encontrado'}), 404
         content = open(path, 'r', encoding='latin-1', errors='ignore').read().splitlines()
-        pat = re.compile(r'^(\d{6})(\d{3})(\d{6})(\d{3})([A-Z\s\d]+)\s*kg')
+        # Regex pattern corrigida para extrair código maior (posições 3-9) e preço (posições 10-15)
+        # Formato: XX[CODIGO_7_DIGITOS][PRECO_6_DIGITOS][XXX][NOME]
+        pat = re.compile(r'^(\d{2})(\d{7})(\d{6})(\d{3})(.+)$')
         produtos = []
         for ln in content:
             m = pat.match(ln.rstrip())
             if not m:
                 continue
-            cm = re.search(r"\bKG\b\s*0*(\d{3,6})\s*$", ln, re.IGNORECASE)
-            codigo = (cm.group(1) if cm else m.group(2))
+            
+            # Tentar encontrar código alternativo no fim da linha (ex: kg 00175)
+            cm = re.search(r"\bKG\b\s*0*(\d{3,7})\s*$", ln, re.IGNORECASE)
+            # Se não achar no fim, usa o grupo 2 (7 dígitos) e converte para int para remover zeros à esquerda
+            codigo = (cm.group(1) if cm else str(int(m.group(2))))
+            
             preco_val = round(int(m.group(3)) / 100, 2)
             nome_raw = m.group(5).strip()
+            # Limpar "kg" do nome se existir
+            nome_raw = re.sub(r'\bkg\b', '', nome_raw, flags=re.IGNORECASE).strip()
             nome_fmt = nome_raw.title()
             produtos.append({'codigo': codigo, 'name': nome_fmt, 'price': preco_val, 'is_active': True})
         import unicodedata, re
@@ -1706,23 +1851,36 @@ def import_processed_butcher_data_inner(produtos_data, official_code_map=None, p
                 butcher_pat = re.compile(r"\b(alcatra|picanha|patinho|lagarto|maminha|cox[aã]o|ac[eé]m|paleta|contra\s*fil[eé]|fil[eé]|bisteca|costela|pernil|miolo|fraldinha|cupim|carne|su[ií]na|bovina|frango|coxa|sobrecoxa|asa|peito|linguiç?a|salsicha|toucinho|bacon)\b", re.IGNORECASE)
                 incoming_is_butcher = bool(butcher_pat.search(nome or ''))
                 existing_is_butcher = bool(butcher_pat.search(existing.nome or ''))
-                if price_delta_limit_pct and delta_pct > price_delta_limit_pct:
-                    if not preview:
-                        conflict = ImportConflict(job_id=job_id, codigo=codigo, tipo='price', nome_atual=existing.nome, nome_novo=nome, preco_atual=existing.preco, preco_novo=preco_decimal, delta_pct=delta_pct)
+                
+                # Atualizar preço se for diferente
+                # Usar float() para comparação segura de Decimal vs Float
+                try:
+                    current_price = float(existing.preco or 0)
+                    new_price = float(preco_decimal)
+                    
+                    if abs(current_price - new_price) > 0.001: # Diferença significativa
+                        if not preview:
+                            ph = PriceHistory(
+                                codigo=codigo, 
+                                nome=existing.nome, 
+                                preco_anterior=existing.preco, 
+                                preco_novo=preco_decimal, 
+                                delta_pct=delta_pct, 
+                                job_id=job_id
+                            )
+                            db.session.add(ph)
+                            existing.preco = preco_decimal
+                except Exception as e:
+                    print(f"Erro ao comparar preços: {e}")
+                
+                if not preview:
+                    if (incoming_is_butcher and not existing_is_butcher) or (not name_similarity_min or name_ratio >= name_similarity_min):
+                        existing.nome = nome
+                    else:
+                        conflict = ImportConflict(job_id=job_id, codigo=codigo, tipo='name', nome_atual=existing.nome, nome_novo=nome, preco_atual=existing.preco, preco_novo=preco_decimal, delta_pct=delta_pct)
                         db.session.add(conflict)
-                    quarantine_count += 1
-                else:
-                    if not preview:
-                        ph = PriceHistory(codigo=codigo, nome=existing.nome, preco_anterior=existing.preco, preco_novo=preco_decimal, delta_pct=delta_pct, job_id=job_id)
-                        db.session.add(ph)
-                        existing.preco = preco_decimal
-                        if (incoming_is_butcher and not existing_is_butcher) or (not name_similarity_min or name_ratio >= name_similarity_min):
-                            existing.nome = nome
-                        else:
-                            conflict = ImportConflict(job_id=job_id, codigo=codigo, tipo='name', nome_atual=existing.nome, nome_novo=nome, preco_atual=existing.preco, preco_novo=preco_decimal, delta_pct=delta_pct)
-                            db.session.add(conflict)
-                        existing.ativo = ativo
-                        existing.updated_at = get_brazil_now()
+                    existing.ativo = ativo
+                    existing.updated_at = get_brazil_now()
             else:
                 if not preview:
                     posicoes_ocupadas = [p.posicao for p in ButcherProduct.query.all()]
@@ -1752,7 +1910,10 @@ def start_toledo_monitor(path, interval_minutes):
         import re
         from collections import Counter, defaultdict
         last_mtime = None
-        pat = re.compile(r'^(\d{6})(\d{3})(\d{6})(\d{3})([A-Z\s\d]+)\s*kg', re.IGNORECASE)
+        # Regex ajustado para capturar código de 7 dígitos (ex: 0043175) em vez de quebrar em 6+3
+        # Antes: r'^(\d{6})(\d{3})(\d{6})(\d{3})([A-Z\s\d]+)\s*kg'
+        # Agora: r'^(\d{2})(\d{7})(\d{6})(\d{3})([A-Z\s\d]+)\s*kg'
+        pat = re.compile(r'^(\d{2})(\d{7})(\d{6})(\d{3})([A-Z\s\d]+)\s*kg', re.IGNORECASE)
         while True:
             try:
                 if os.path.exists(path):
@@ -1764,15 +1925,29 @@ def start_toledo_monitor(path, interval_minutes):
                             line = ln.rstrip()
                             m = pat.match(line)
                             if m:
-                                cm = re.search(r"\bKG\b\s*0*(\d{3,6})\s*$", line, re.IGNORECASE)
-                                codigo = (cm.group(1) if cm else m.group(2))
+                                cm = re.search(r"\bKG\b\s*0*(\d{3,7})\s*$", line, re.IGNORECASE)
+                                if cm:
+                                    codigo = cm.group(1)
+                                else:
+                                    # Fallback: remove zeros à esquerda do grupo 2 se não encontrar KG
+                                    raw_code = m.group(2)
+                                    codigo = str(int(raw_code))
+                                
                                 preco_val = round(int(m.group(3)) / 100, 2)
                                 nome_raw = m.group(5).strip()
                             else:
                                 if len(line) < 20:
                                     continue
-                                cm = re.search(r"\bKG\b\s*0*(\d{3,6})\s*$", line, re.IGNORECASE)
-                                codigo = (cm.group(1) if cm else line[6:9])
+                                cm = re.search(r"\bKG\b\s*0*(\d{3,7})\s*$", line, re.IGNORECASE)
+                                if cm:
+                                    codigo = cm.group(1)
+                                else:
+                                    # Fallback: tenta pegar da posição fixa e remover zeros
+                                    raw_code = line[6:9]
+                                    try:
+                                        codigo = str(int(raw_code))
+                                    except:
+                                        codigo = raw_code
                                 preco_str = line[9:15]
                                 try:
                                     preco_val = round(int(preco_str) / 100, 2)
@@ -2152,19 +2327,18 @@ def update_department(department_id):
 
 @app.route('/api/departments/<department_id>', methods=['DELETE'])
 def delete_department(department_id):
-    """Excluir departamento (soft delete)"""
+    """Excluir departamento com limpeza de painéis e associações"""
     try:
         department = Department.query.get_or_404(department_id)
-        
-        # Verificar se tem painéis associados
-        if department.panels:
-            return jsonify({'error': 'Não é possível excluir departamento com painéis associados'}), 400
-        
-        department.active = False
-        department.updated_at = get_brazil_now()
+        # Remover todos os painéis (ativos e inativos) e suas associações
+        panels = DepartmentPanel.query.filter_by(department_id=department_id).all()
+        for panel in panels:
+            ProductPanelAssociation.query.filter_by(panel_id=panel.id).delete()
+            db.session.delete(panel)
+        # Excluir o departamento definitivamente
+        db.session.delete(department)
         db.session.commit()
-        
-        return jsonify({'message': 'Departamento excluído com sucesso'})
+        return '', 204
         
     except Exception as e:
         db.session.rollback()
@@ -2303,19 +2477,22 @@ def get_panel_products(panel_id):
         panel = DepartmentPanel.query.get_or_404(panel_id)
         
         associations = ProductPanelAssociation.query.filter_by(
-            panel_id=panel_id,
-            active_in_panel=True
+            panel_id=panel_id
         ).join(ButcherProduct).filter(ButcherProduct.ativo == True).all()
+        
+        # Ordenar por position_override ou posição original
+        associations.sort(key=lambda x: x.position_override if x.position_override is not None else (x.product.posicao if x.product else 999))
         
         products = []
         for assoc in associations:
             product = assoc.product
             products.append({
-                'id': product.id,
+                'id': assoc.id,  # Retornar o ID da associação para ser único no frontend
+                'product_id': product.id,
                 'codigo': product.codigo,
                 'name': product.nome,
                 'price': float(product.preco),
-                'position': product.posicao,
+                'position': assoc.position_override if assoc.position_override is not None else product.posicao,
                 'is_active': product.ativo,
                 'position_override': assoc.position_override,
                 'active_in_panel': assoc.active_in_panel
@@ -2358,6 +2535,11 @@ def add_products_to_panel(panel_id):
                 )
                 db.session.add(association)
                 added_count += 1
+            else:
+                if not existing.active_in_panel:
+                    existing.active_in_panel = True
+                    existing.updated_at = get_brazil_now()
+                    added_count += 1
         
         db.session.commit()
         
@@ -2370,14 +2552,69 @@ def add_products_to_panel(panel_id):
         db.session.rollback()
         return jsonify({'error': f'Erro ao adicionar produtos ao painel: {str(e)}'}), 500
 
-@app.route('/api/panels/<panel_id>/products/<product_id>', methods=['DELETE'])
-def remove_product_from_panel(panel_id, product_id):
-    """Remover produto de um painel"""
+@app.route('/api/panels/<panel_id>/products/reorder', methods=['POST'])
+def reorder_panel_products(panel_id):
+    """Reordenar produtos no painel em lote"""
     try:
+        data = request.get_json() or {}
+        product_orders = data.get('product_orders', []) # Lista de {product_id, position}
+        
+        if not product_orders:
+            return jsonify({'error': 'Lista de ordens é obrigatória'}), 400
+            
+        for order in product_orders:
+            # p_id pode ser ID da associação ou ID do produto
+            p_id = order.get('product_id') or order.get('id')
+            pos = order.get('position')
+            
+            if p_id and pos is not None:
+                try:
+                    pos_int = int(pos)
+                    if pos_int < 1 or pos_int > 100:
+                        continue
+                    
+                    # Tenta por ID de associação primeiro
+                    association = ProductPanelAssociation.query.filter_by(
+                        id=p_id,
+                        panel_id=panel_id
+                    ).first()
+                    
+                    # Se não encontrar, tenta por ID de produto
+                    if not association:
+                        association = ProductPanelAssociation.query.filter_by(
+                            panel_id=panel_id,
+                            product_id=p_id
+                        ).first()
+                    
+                    if association:
+                        association.position_override = pos_int
+                        association.updated_at = get_brazil_now()
+                except (TypeError, ValueError):
+                    continue
+        
+        db.session.commit()
+        return jsonify({'message': 'Ordem atualizada com sucesso'})
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Erro ao reordenar produtos: {str(e)}'}), 500
+
+@app.route('/api/panels/<panel_id>/products/<identifier>', methods=['DELETE'])
+def remove_product_from_panel(panel_id, identifier):
+    """Remover produto de um painel (identifier pode ser ID da associação ou do produto)"""
+    try:
+        # Tenta buscar por ID da associação primeiro
         association = ProductPanelAssociation.query.filter_by(
-            product_id=product_id,
+            id=identifier,
             panel_id=panel_id
-        ).first_or_404()
+        ).first()
+        
+        # Se não encontrar, tenta buscar por ID do produto
+        if not association:
+            association = ProductPanelAssociation.query.filter_by(
+                product_id=identifier,
+                panel_id=panel_id
+            ).first_or_404()
         
         db.session.delete(association)
         db.session.commit()
@@ -2388,14 +2625,22 @@ def remove_product_from_panel(panel_id, product_id):
         db.session.rollback()
         return jsonify({'error': f'Erro ao remover produto do painel: {str(e)}'}), 500
 
-@app.route('/api/panels/<panel_id>/products/<product_id>', methods=['PUT'])
-def update_product_in_panel(panel_id, product_id):
+@app.route('/api/panels/<panel_id>/products/<identifier>', methods=['PUT'])
+def update_product_in_panel(panel_id, identifier):
     """Atualizar associação de produto no painel (posição e visibilidade)"""
     try:
+        # Tenta buscar por ID da associação primeiro
         association = ProductPanelAssociation.query.filter_by(
-            product_id=product_id,
+            id=identifier,
             panel_id=panel_id
-        ).first_or_404()
+        ).first()
+        
+        # Se não encontrar, tenta buscar por ID do produto
+        if not association:
+            association = ProductPanelAssociation.query.filter_by(
+                product_id=identifier,
+                panel_id=panel_id
+            ).first_or_404()
         data = request.get_json() or {}
 
         if 'position_override' in data:
@@ -2405,8 +2650,21 @@ def update_product_in_panel(panel_id, product_id):
                     pos = int(pos)
                 except Exception:
                     return jsonify({'error': 'Posição inválida'}), 400
-                if pos < 1 or pos > 24:
-                    return jsonify({'error': 'Posição deve ser entre 1 e 24'}), 400
+                if pos < 1 or pos > 100:
+                    return jsonify({'error': 'Posição deve ser entre 1 e 100'}), 400
+                
+                # Se a posição mudou, verificar se já existe outro produto nela para trocar
+                if pos != association.position_override:
+                    existing = ProductPanelAssociation.query.filter_by(
+                        panel_id=panel_id,
+                        position_override=pos
+                    ).first()
+                    
+                    if existing and existing.id != association.id:
+                        print(f"[PAINEL] Trocando posição do produto {existing.product_id} de {pos} para {association.position_override}")
+                        existing.position_override = association.position_override
+                        existing.updated_at = get_brazil_now()
+                
                 association.position_override = pos
 
         if 'active_in_panel' in data:
@@ -2544,13 +2802,50 @@ def view_department_panel(department_id, panel_id):
             active_in_panel=True
         ).join(ButcherProduct).filter(ButcherProduct.ativo == True).all()
         
-        products = []
+        # Agrupar por nome normalizado para evitar duplicatas visuais
+        # Prioriza o produto com o ID mais recente ou posição definida
+        grouped_products = {}
+        from unicodedata import normalize, combining
+        import re
+
+        def _norm_name(s):
+            s = normalize('NFD', s or '')
+            s = ''.join(c for c in s if not combining(c))
+            s = s.lower()
+            s = re.sub(r'\s+', ' ', s).strip()
+            return s
+
         for assoc in associations:
+            p_name_norm = _norm_name(assoc.product.nome)
+            p_code = (assoc.product.codigo or '').strip()
+            group_key = (p_name_norm, p_code)
+            
             product_dict = assoc.product.to_dict()
-            # Usar posição override se definida, senão usar posição padrão
-            product_dict['posicao'] = assoc.position_override or assoc.product.posicao
-            products.append(product_dict)
+            effective_pos = assoc.position_override or assoc.product.posicao
+            product_dict['posicao'] = effective_pos
+            product_dict['position'] = effective_pos # Mapeamento para frontend
+            
+            if group_key not in grouped_products:
+                grouped_products[group_key] = product_dict
+            else:
+                # Se já existe (mesmo nome e mesmo código), mantém o que tem posição override ou ID maior
+                existing = grouped_products[group_key]
+                if assoc.position_override and not existing.get('position_override'):
+                    grouped_products[group_key] = product_dict
+                elif assoc.product.id > existing.get('id', 0):
+                    # Se ambos não tem override ou ambos tem, prefere o mais recente
+                    if (bool(assoc.position_override) == bool(existing.get('position_override'))):
+                        grouped_products[group_key] = product_dict
         
+        products = list(grouped_products.values())
+        # Ordenar produtos pela posição definida
+        products.sort(key=lambda x: x.get('position') or 999)
+        
+        if panel.footer_text == OLD_DEFAULT_FOOTER_TEXT:
+            panel.footer_text = DEFAULT_FOOTER_TEXT
+            panel.updated_at = get_brazil_now()
+            db.session.commit()
+
         return jsonify({
             'panel': panel.to_dict(),
             'department': panel.department.to_dict(),
@@ -2602,12 +2897,17 @@ def perform_sync_department_panel(department_id, panel_id, exact_match=True):
     keep_map = {}
     dup_remove = []
     for assoc in associations:
+        # Removido: Não deletar associações existentes só porque não dão match nas keywords
+        # Isso permite que o usuário adicione produtos manualmente sem que eles sejam removidos
+        # pname = assoc.product.nome if assoc.product else ''
+        # if not _match(pname):
+        #     db.session.delete(assoc)
+        #     removed_count += 1
+        #     continue
+        
+        # Apenas verificar duplicatas visuais (mesmo nome e código)
         pname = assoc.product.nome if assoc.product else ''
-        if not _match(pname):
-            db.session.delete(assoc)
-            removed_count += 1
-            continue
-        key = _norm(pname)
+        key = (_norm(pname), (assoc.product.codigo or '').strip())
         prev = keep_map.get(key)
         if not prev:
             keep_map[key] = assoc
@@ -2635,20 +2935,39 @@ def perform_sync_department_panel(department_id, panel_id, exact_match=True):
     ).all()
     added_count = 0
     grouped = {}
+    # Só adiciona produtos se a associação NÃO existir E o produto for novo (criado recentemente)
+    # ou se for a primeira vez que o painel é populado (nenhuma associação existente)
+    has_any_association = ProductPanelAssociation.query.filter_by(panel_id=panel.id).first() is not None
+    
     for product in candidates:
         if _match(product.nome):
-            key = _norm(product.nome)
-            prev = grouped.get(key)
-            if not prev:
-                grouped[key] = product
-            else:
+            # Se o painel já tem produtos, só adiciona se o produto for muito recente (criado nos últimos 5 min)
+            # Isso evita que produtos antigos removidos manualmente voltem a aparecer
+            is_new_product = False
+            if product.created_at:
                 try:
-                    prev_price = float(prev.preco or 0)
-                    cur_price = float(product.preco or 0)
-                    if cur_price > prev_price:
-                        grouped[key] = product
+                    delta = get_brazil_now() - product.created_at
+                    # Considera "novo" se criado nos últimos 10 minutos (tempo suficiente para o ciclo do monitor)
+                    if delta.total_seconds() < 600: 
+                        is_new_product = True
                 except Exception:
+                    pass
+            
+            # Se o painel está vazio, popula tudo (primeira carga)
+            # Se não, só adiciona se for produto novo
+            if not has_any_association or is_new_product:
+                key = (_norm(product.nome), (product.codigo or '').strip())
+                prev = grouped.get(key)
+                if not prev:
                     grouped[key] = product
+                else:
+                    try:
+                        prev_price = float(prev.preco or 0)
+                        cur_price = float(product.preco or 0)
+                        if cur_price > prev_price:
+                            grouped[key] = product
+                    except Exception:
+                        grouped[key] = product
     for sel in grouped.values():
         assoc = ProductPanelAssociation(product_id=sel.id, panel_id=panel.id, active_in_panel=True)
         db.session.add(assoc)
@@ -2715,7 +3034,9 @@ def create_default_departments():
     ]
     
     for dept_data in departments_data:
-        existing = Department.query.filter_by(code=dept_data['code']).first()
+        existing = Department.query.filter(
+            (Department.code == dept_data['code']) | (Department.name == dept_data['name'])
+        ).first()
         if not existing:
             # Criar departamento primeiro
             department = Department(**dept_data)
@@ -2729,7 +3050,7 @@ def create_default_departments():
                 department_id=department.id,
                 title=dept_data['name'].upper(),
                 subtitle='Produtos Selecionados',
-                footer_text='Horário de funcionamento: Segunda a Sábado das 7h às 19h',
+                footer_text=DEFAULT_FOOTER_TEXT,
                 is_default=True,
                 display_order=1
             )
