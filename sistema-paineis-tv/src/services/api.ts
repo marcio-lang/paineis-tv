@@ -1,5 +1,11 @@
 // Configuração base da API
-const API_BASE_URL = (import.meta.env.VITE_API_URL || '').trim() || '/api';
+const rawApiBaseUrl = (import.meta.env.VITE_API_URL || '').trim() || '/api';
+const API_BASE_URL =
+  typeof window !== 'undefined' &&
+  window.location?.protocol === 'https:' &&
+  rawApiBaseUrl.startsWith('http://')
+    ? `https://${rawApiBaseUrl.slice('http://'.length)}`
+    : rawApiBaseUrl;
 
 // Função para obter o token de autenticação
 const getAuthToken = (): string | null => {
