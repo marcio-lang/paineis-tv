@@ -6,8 +6,10 @@ import { Modal } from '../../components/base/Modal';
 import { Input } from '../../components/base/Input';
 import { Button } from '../../components/base/Button';
 import { ContainerLayout } from '../../components/layout/Layout';
-import { actionService, Action, CreateActionData, UpdateActionData, ActionImage } from '../../services/actionService';
-import { panelService, Panel } from '../../services/panelService';
+import { actionService } from '../../services/actionService';
+import type { Action, CreateActionData, UpdateActionData, ActionImage } from '../../services/actionService';
+import { panelService } from '../../services/panelService';
+import type { Panel } from '../../services/panelService';
 import { ApiError } from '../../services/api';
 
 export const ActionsPage: React.FC = () => {

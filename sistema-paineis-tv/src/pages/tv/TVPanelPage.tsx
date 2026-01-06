@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { panelService, PanelViewData, PanelProduct } from '../../services/panelService';
+import { panelService } from '../../services/panelService';
+import type { PanelViewData, PanelProduct } from '../../services/panelService';
 import { AnimatedPage } from '../../components/ui/AnimatedPage';
 
 export const TVPanelPage: React.FC = () => {
@@ -218,10 +219,32 @@ export const TVPanelPage: React.FC = () => {
 
                       {/* Preço */}
                       <div className="text-center">
-                        <div className="text-3xl font-bold mb-1 group-hover:scale-110 transition-transform duration-300 tabular-nums"
-                             style={{ color: departmentColor }}>
-                          {panelService.formatPrice(product.preco)}
-                        </div>
+                        {(() => {
+                          const priceText = panelService.formatPrice(product.preco);
+                          const match = priceText.match(/^(\D+)(.+)$/);
+                          const currency = match ? match[1].trim() : '';
+                          const amount = match ? match[2].trim() : priceText;
+                          return (
+                            <div
+                              className="text-4xl font-bold mb-1 group-hover:scale-110 transition-transform duration-300 tabular-nums"
+                              style={{ color: departmentColor }}
+                            >
+                              {currency && (
+                                <span
+                                  style={{
+                                    fontSize: '0.45em',
+                                    marginRight: '0.08em',
+                                    display: 'inline-block',
+                                    transform: 'translateY(-0.14em)'
+                                  }}
+                                >
+                                  {currency}
+                                </span>
+                              )}
+                              <span>{amount}</span>
+                            </div>
+                          );
+                        })()}
                         <div className="text-gray-600 text-sm font-medium">
                           por kg
                         </div>

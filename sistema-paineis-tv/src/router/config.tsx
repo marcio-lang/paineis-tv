@@ -1,5 +1,5 @@
 
-import { RouteObject } from 'react-router-dom';
+import type { RouteObject } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import LoadingSpinner from '../components/base/LoadingSpinner';
 

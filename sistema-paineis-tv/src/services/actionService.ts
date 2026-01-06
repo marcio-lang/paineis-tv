@@ -1,5 +1,5 @@
 import { api } from './api';
-import { Panel, Action, ActionImage } from './panelService';
+import type { Panel, Action, ActionImage } from './panelService';
 
 export interface CreateActionData {
   name: string;

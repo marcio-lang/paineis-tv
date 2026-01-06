@@ -46,8 +46,8 @@ export const StandardTVPanel: React.FC<StandardTVPanelProps> = ({
 
   const getPriceFontSize = (priceText: string) => {
     const digits = priceText.replace(/[^0-9]/g, '').length;
-    const base = digits <= 3 ? 0.23 : (digits === 4 ? 0.21 : 0.19);
-    return `clamp(1.8rem, calc((100vw - 96px) / ${COLS} * ${base}), 4.2rem)`;
+    const base = digits <= 3 ? 0.27 : (digits === 4 ? 0.24 : 0.21);
+    return `clamp(2rem, calc((100vw - 96px) / ${COLS} * ${base}), 4.8rem)`;
   };
 
   useEffect(() => {
@@ -258,8 +258,8 @@ export const StandardTVPanel: React.FC<StandardTVPanelProps> = ({
 
                           {/* Nome do Produto */}
                           <h3 
-                            className="font-bold mb-2 leading-tight group-hover:scale-105 transition-all duration-300"
-                            style={{ color: colors.secondary, fontSize: 'clamp(1rem, 3.5vw, 1.25rem)' }}
+                            className="font-bold mb-2 leading-tight group-hover:scale-105 transition-all duration-300 text-black"
+                            style={{ fontSize: 'clamp(1rem, 3.5vw, 1.25rem)' }}
                           >
                             {product.name.toUpperCase()}
                           </h3>
@@ -269,12 +269,27 @@ export const StandardTVPanel: React.FC<StandardTVPanelProps> = ({
                             {(() => {
                               const priceText = butcherService.formatPrice(product.price);
                               const fontSize = getPriceFontSize(priceText);
+                              const match = priceText.match(/^(\D+)(.+)$/);
+                              const currency = match ? match[1].trim() : '';
+                              const amount = match ? match[2].trim() : priceText;
                               return (
                                 <div 
                                   className={`leading-none font-bold mb-1 tabular-nums tracking-tight whitespace-nowrap max-w-full mx-auto px-1`}
                                   style={{ color: colors.primary, fontSize, lineHeight: 1 }}
                                 >
-                                  {priceText}
+                                  {currency && (
+                                    <span
+                                      style={{
+                                        fontSize: '0.45em',
+                                        marginRight: '0.08em',
+                                        display: 'inline-block',
+                                        transform: 'translateY(-0.14em)'
+                                      }}
+                                    >
+                                      {currency}
+                                    </span>
+                                  )}
+                                  <span>{amount}</span>
                                 </div>
                               );
                             })()}

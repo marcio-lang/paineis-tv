@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
-import { DepartmentPanel } from '../../services/departmentService';
+import type { DepartmentPanel } from '../../services/departmentService';
 
 interface EditPanelModalProps {
   panel: DepartmentPanel;

@@ -6,8 +6,10 @@ import { Modal } from '../../components/base/Modal';
 import { Input } from '../../components/base/Input';
 import { Button } from '../../components/base/Button';
 import { ContainerLayout } from '../../components/layout/Layout';
-import { butcherService, ButcherProduct, CreateButcherProductData, UpdateButcherProductData } from '../../services/butcherService';
-import { departmentService, Department } from '../../services/departmentService';
+import { butcherService } from '../../services/butcherService';
+import type { ButcherProduct, CreateButcherProductData, UpdateButcherProductData } from '../../services/butcherService';
+import { departmentService } from '../../services/departmentService';
+import type { Department } from '../../services/departmentService';
 
 export const ButcherAdminPage: React.FC = () => {
   console.log('🎯 ButcherAdminPage: Componente sendo inicializado');

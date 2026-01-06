@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { X, Search, Plus, Trash2, Package } from 'lucide-react';
 import { toast } from 'sonner';
-import { DepartmentPanel, departmentService, PanelProductView } from '../../services/departmentService';
-import { butcherService, ButcherProduct } from '../../services/butcherService';
+import { departmentService } from '../../services/departmentService';
+import type { DepartmentPanel, PanelProductView } from '../../services/departmentService';
+import { butcherService } from '../../services/butcherService';
+import type { ButcherProduct } from '../../services/butcherService';
 
 interface ManagePanelProductsModalProps {
   panel: DepartmentPanel;

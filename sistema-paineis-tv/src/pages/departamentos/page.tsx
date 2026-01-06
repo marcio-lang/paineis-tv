@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Package, Settings, Eye, Trash2, Edit, Users, Monitor } from 'lucide-react';
 import { toast } from 'sonner';
-import { departmentService, Department, DepartmentPanel } from '../../services/departmentService';
+import { departmentService } from '../../services/departmentService';
+import type { Department, DepartmentPanel } from '../../services/departmentService';
 import CreateDepartmentModal from '../../components/departments/CreateDepartmentModal';
 import EditDepartmentModal from '../../components/departments/EditDepartmentModal';
 import CreatePanelModal from '../../components/departments/CreatePanelModal';

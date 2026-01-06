@@ -6,7 +6,8 @@ import { Modal } from '../../components/base/Modal';
 import { Input } from '../../components/base/Input';
 import { Button } from '../../components/base/Button';
 import { ContainerLayout } from '../../components/layout/Layout';
-import { panelService, Panel, CreatePanelData, UpdatePanelData, MediaFile } from '../../services/panelService';
+import { panelService } from '../../services/panelService';
+import type { Panel, CreatePanelData, UpdatePanelData, MediaFile } from '../../services/panelService';
 
 export const PanelsPage: React.FC = () => {
   console.log('🔥 PanelsPage: Componente renderizado - VERSÃO ATUALIZADA');

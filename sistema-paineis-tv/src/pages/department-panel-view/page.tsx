@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { departmentService, DepartmentPanel } from '../../services/departmentService';
+import { departmentService } from '../../services/departmentService';
+import type { DepartmentPanel } from '../../services/departmentService';
 import { StandardTVPanel } from '../../components/tv/StandardTVPanel';
-import { ButcherProduct } from '../../services/butcherService';
+import type { ButcherProduct } from '../../services/butcherService';
 
 const DepartmentPanelViewPage: React.FC = () => {
   const { departmentId, panelId } = useParams<{ departmentId: string; panelId: string }>();

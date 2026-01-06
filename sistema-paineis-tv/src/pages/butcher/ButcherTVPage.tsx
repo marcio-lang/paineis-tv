@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { butcherService, ButcherProduct, ButcherConfig } from '../../services/butcherService';
+import { butcherService } from '../../services/butcherService';
+import type { ButcherProduct, ButcherConfig } from '../../services/butcherService';
 import { departmentService } from '../../services/departmentService';
 import { AnimatedPage, StaggeredAnimation } from '../../components/ui/AnimatedPage';
 
@@ -185,7 +186,7 @@ export const ButcherTVPage: React.FC = () => {
         style={backgroundStyle}
       >
         {/* Header */}
-        <div className="relative z-10 p-4">
+        <div className="relative z-10 px-4 pt-4 pb-1">
           <div className="flex justify-between items-start">
             <div className="animate-fade-in-up">
               <h1 className="text-5xl font-bold text-black mb-2 text-shadow-lg animate-fade-in-up">
@@ -212,7 +213,7 @@ export const ButcherTVPage: React.FC = () => {
         </div>
 
         {/* Grid Posicional 6x4 */}
-        <div className="relative z-10 px-6 pb-4">
+        <div className="relative z-10 px-6 pb-4 -mt-2">
             {products.length === 0 ? (
               <div className="text-center py-20 animate-fade-in">
                 <div className="text-4xl font-bold mb-4 animate-bounce">Nenhum produto disponível</div>
@@ -246,10 +247,25 @@ export const ButcherTVPage: React.FC = () => {
                             {(() => {
                               const priceText = butcherService.formatPrice(product.price);
                               const digitCount = priceText.replace(/[^0-9]/g, '').length;
-                              const sizeClass = digitCount <= 3 ? 'text-4xl' : (digitCount === 4 ? 'text-3xl' : 'text-2xl');
+                              const sizeClass = digitCount <= 3 ? 'text-5xl' : (digitCount === 4 ? 'text-4xl' : 'text-3xl');
+                              const match = priceText.match(/^(\D+)(.+)$/);
+                              const currency = match ? match[1].trim() : '';
+                              const amount = match ? match[2].trim() : priceText;
                               return (
                                 <div className={`${sizeClass} leading-none font-bold text-red-600 mb-1 tabular-nums tracking-tight whitespace-nowrap max-w-full mx-auto px-1`}>
-                                  {priceText}
+                                  {currency && (
+                                    <span
+                                      style={{
+                                        fontSize: '0.45em',
+                                        marginRight: '0.08em',
+                                        display: 'inline-block',
+                                        transform: 'translateY(-0.14em)'
+                                      }}
+                                    >
+                                      {currency}
+                                    </span>
+                                  )}
+                                  <span>{amount}</span>
                                 </div>
                               );
                             })()}
