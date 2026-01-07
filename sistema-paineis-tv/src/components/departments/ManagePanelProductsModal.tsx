@@ -25,6 +25,8 @@ const ManagePanelProductsModal: React.FC<ManagePanelProductsModalProps> = ({
   const [addingProducts, setAddingProducts] = useState(false);
   const [savingAssociation, setSavingAssociation] = useState<string | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [selectedPanelProductIds, setSelectedPanelProductIds] = useState<string[]>([]);
+  const [bulkRemoving, setBulkRemoving] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -119,9 +121,63 @@ const ManagePanelProductsModal: React.FC<ManagePanelProductsModalProps> = ({
       toast.success('Produto removido do painel!');
       loadData();
       onUpdate();
+      setSelectedPanelProductIds((prev) => prev.filter((id) => id !== productId));
     } catch (error: any) {
       console.error('Erro ao remover produto:', error);
       toast.error(error.response?.data?.error || 'Erro ao remover produto');
+    }
+  };
+
+  const handleToggleSelectPanelProduct = (associationId: string) => {
+    setSelectedPanelProductIds((prev) =>
+      prev.includes(associationId)
+        ? prev.filter((id) => id !== associationId)
+        : [...prev, associationId]
+    );
+  };
+
+  const handleToggleSelectAllVisible = () => {
+    const visibleIds = filteredPanelProducts.map((p) => p.id);
+    const allVisibleSelected = visibleIds.every((id) => selectedPanelProductIds.includes(id));
+    if (allVisibleSelected) {
+      setSelectedPanelProductIds((prev) => prev.filter((id) => !visibleIds.includes(id)));
+    } else {
+      setSelectedPanelProductIds((prev) => Array.from(new Set([...prev, ...visibleIds])));
+    }
+  };
+
+  const handleBulkRemoveSelected = async () => {
+    const idsToRemove = filteredPanelProducts
+      .map((p) => p.id)
+      .filter((id) => selectedPanelProductIds.includes(id));
+
+    if (idsToRemove.length === 0) {
+      toast.info('Selecione ao menos um produto para remover.');
+      return;
+    }
+
+    if (
+      !confirm(
+        `Tem certeza que deseja remover ${idsToRemove.length} produto(s) deste painel?`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setBulkRemoving(true);
+      for (const id of idsToRemove) {
+        await departmentService.removeProductFromPanel(panel.id, id);
+      }
+      toast.success(`Removidos ${idsToRemove.length} produto(s) do painel!`);
+      setSelectedPanelProductIds((prev) => prev.filter((id) => !idsToRemove.includes(id)));
+      loadData();
+      onUpdate();
+    } catch (error: any) {
+      console.error('Erro ao remover produtos selecionados:', error);
+      toast.error(error.response?.data?.error || 'Erro ao remover produtos selecionados');
+    } finally {
+      setBulkRemoving(false);
     }
   };
 
@@ -179,20 +235,51 @@ const ManagePanelProductsModal: React.FC<ManagePanelProductsModalProps> = ({
             {/* Produtos no Painel */}
             <div className="border-r border-gray-200 flex flex-col overflow-hidden min-h-0">
               <div className="p-4 border-b border-gray-200 bg-gray-50">
-                <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-3">
-                  Produtos no Painel ({filteredPanelProducts.length}/{panelProducts.length})
-                </h3>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                  <input
-                    type="text"
-                    placeholder="Buscar no painel..."
-                    value={panelSearchTerm}
-                    onChange={(e) => setPanelSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                  />
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider mb-3">
+                      Produtos no Painel ({filteredPanelProducts.length}/{panelProducts.length})
+                    </h3>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                      <input
+                        type="text"
+                        placeholder="Buscar no painel..."
+                        value={panelSearchTerm}
+                        onChange={(e) => setPanelSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      Arraste para reordenar ou defina a posição manualmente
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-end gap-2">
+                    <label className="flex items-center gap-2 text-xs text-gray-700">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        onChange={handleToggleSelectAllVisible}
+                        checked={
+                          filteredPanelProducts.length > 0 &&
+                          filteredPanelProducts
+                            .map((p) => p.id)
+                            .every((id) => selectedPanelProductIds.includes(id))
+                        }
+                      />
+                      Selecionar visíveis
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleBulkRemoveSelected}
+                      disabled={bulkRemoving || selectedPanelProductIds.length === 0}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded bg-red-600 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-red-700"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      Remover selecionados
+                    </button>
+                  </div>
                 </div>
-                <p className="text-xs text-gray-500 mt-2">Arraste para reordenar ou defina a posição manualmente</p>
               </div>
               
               <div className="flex-1 overflow-y-scroll p-4 bg-white custom-scrollbar">
@@ -241,7 +328,16 @@ const ManagePanelProductsModal: React.FC<ManagePanelProductsModalProps> = ({
                           }
                         }}
                       >
-                        <div className="flex-1">
+                        <div className="flex items-start gap-3 flex-1">
+                          <div className="pt-1">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              checked={selectedPanelProductIds.includes(association.id)}
+                              onChange={() => handleToggleSelectPanelProduct(association.id)}
+                            />
+                          </div>
+                          <div>
                           <h4 className="font-medium text-gray-900">
                             {association.name}
                           </h4>
@@ -271,6 +367,7 @@ const ManagePanelProductsModal: React.FC<ManagePanelProductsModalProps> = ({
                             >
                               {association.active_in_panel ? 'Visível' : 'Oculto'}
                             </button>
+                          </div>
                           </div>
                         </div>
                         <button

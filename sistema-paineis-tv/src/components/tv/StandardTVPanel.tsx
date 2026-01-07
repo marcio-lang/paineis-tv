@@ -158,11 +158,11 @@ export const StandardTVPanel: React.FC<StandardTVPanelProps> = ({
 
   if (loading) {
     const colors = getDepartmentColors();
-    return (
-      <div 
-        className="min-h-screen flex items-center justify-center"
-        style={{ background: colors.gradient }}
-      >
+          return (
+            <div 
+              className="min-h-screen flex items-center justify-center"
+              style={{ background: colors.gradient }}
+            >
         <div className="flex flex-col items-center space-y-4">
           <div className="animate-spin rounded-full h-16 w-16 border-4 border-white border-t-transparent"></div>
           <div className="text-white text-2xl font-bold animate-pulse">Carregando...</div>
@@ -173,6 +173,9 @@ export const StandardTVPanel: React.FC<StandardTVPanelProps> = ({
 
   const gridProducts = createPagedGrid(pageIndex);
   const colors = getDepartmentColors();
+  const productNameColor = department.product_name_color || '#000000';
+  const priceColor = department.price_color || colors.primary;
+  const priceBackgroundColor = department.price_background_color || '#FFFFFF';
 
   // Removido uso de imagem de fundo inexistente; usar apenas gradiente do departamento
   const backgroundStyle = {
@@ -245,26 +248,24 @@ export const StandardTVPanel: React.FC<StandardTVPanelProps> = ({
                   const position = pageIndex * PAGE_SIZE + index + 1;
                     
                     if (product) {
-                      // Slot ocupado - mostrar produto
                       return (
                         <div
                           key={`product-${product.id}`}
-                          className="bg-white/95 backdrop-blur-sm rounded-2xl p-3 sm:p-4 shadow-2xl transform transition-all duration-500 border border-white/20 hover:shadow-3xl hover:scale-105 animate-fade-in-up group overflow-hidden flex flex-col"
+                          className="backdrop-blur-sm rounded-2xl p-3 sm:p-4 shadow-2xl transform transition-all duration-500 border border-white/20 hover:shadow-3xl hover:scale-105 animate-fade-in-up group overflow-hidden flex flex-col"
                           style={{ 
                             animationDelay: `${index * 50}ms`,
-                            animationFillMode: 'both'
+                            animationFillMode: 'both',
+                            backgroundColor: priceBackgroundColor
                           }}
                         >
 
-                          {/* Nome do Produto */}
                           <h3 
-                            className="font-bold mb-2 leading-tight group-hover:scale-105 transition-all duration-300 text-black"
-                            style={{ fontSize: 'clamp(1rem, 3.5vw, 1.25rem)' }}
+                            className="font-bold mb-2 leading-tight group-hover:scale-105 transition-all duration-300"
+                            style={{ fontSize: 'clamp(1rem, 3.5vw, 1.25rem)', color: productNameColor }}
                           >
                             {product.name.toUpperCase()}
                           </h3>
 
-                          {/* Preço */}
                           <div className="text-center w-full flex-1 flex flex-col justify-center">
                             {(() => {
                               const priceText = butcherService.formatPrice(product.price);
@@ -275,7 +276,7 @@ export const StandardTVPanel: React.FC<StandardTVPanelProps> = ({
                               return (
                                 <div 
                                   className={`leading-none font-bold mb-1 tabular-nums tracking-tight whitespace-nowrap max-w-full mx-auto px-1`}
-                                  style={{ color: colors.primary, fontSize, lineHeight: 1 }}
+                                  style={{ color: priceColor, fontSize, lineHeight: 1 }}
                                 >
                                   {currency && (
                                     <span

@@ -11,7 +11,10 @@ const CreateDepartmentModal: React.FC<CreateDepartmentModalProps> = ({ onClose, 
     name: '',
     code: '',
     description: '',
-    color: '#3B82F6'
+    color: '#3B82F6',
+    product_name_color: '#000000',
+    price_color: '#DC2626',
+    price_background_color: '#FFFFFF'
   });
 
   const [loading, setLoading] = useState(false);
@@ -114,7 +117,71 @@ const CreateDepartmentModal: React.FC<CreateDepartmentModalProps> = ({ onClose, 
             </div>
           </div>
 
-          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Cor da Descrição do Produto
+            </label>
+            <div className="flex items-center gap-3">
+              <input
+                type="color"
+                name="product_name_color"
+                value={formData.product_name_color}
+                onChange={handleChange}
+                className="w-12 h-10 border border-gray-300 rounded cursor-pointer"
+              />
+              <input
+                type="text"
+                value={formData.product_name_color}
+                onChange={(e) => setFormData(prev => ({ ...prev, product_name_color: e.target.value }))}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="#000000"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Cor do Preço
+            </label>
+            <div className="flex items-center gap-3">
+              <input
+                type="color"
+                name="price_color"
+                value={formData.price_color}
+                onChange={handleChange}
+                className="w-12 h-10 border border-gray-300 rounded cursor-pointer"
+              />
+              <input
+                type="text"
+                value={formData.price_color}
+                onChange={(e) => setFormData(prev => ({ ...prev, price_color: e.target.value }))}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="#DC2626"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Cor de Fundo do Preço
+            </label>
+            <div className="flex items-center gap-3">
+              <input
+                type="color"
+                name="price_background_color"
+                value={formData.price_background_color}
+                onChange={handleChange}
+                className="w-12 h-10 border border-gray-300 rounded cursor-pointer"
+              />
+              <input
+                type="text"
+                value={formData.price_background_color}
+                onChange={(e) => setFormData(prev => ({ ...prev, price_background_color: e.target.value }))}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="#FFFFFF"
+              />
+            </div>
+          </div>
 
           <div className="flex gap-3 pt-4">
             <button

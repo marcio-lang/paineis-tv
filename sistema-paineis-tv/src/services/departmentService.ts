@@ -6,6 +6,9 @@ export interface Department {
   code: string;
   description?: string;
   color: string;
+  product_name_color?: string;
+  price_color?: string;
+  price_background_color?: string;
   icon: string;
   keywords?: string[];
   active: boolean;
@@ -60,6 +63,9 @@ export interface CreateDepartmentData {
   code: string;
   description?: string;
   color?: string;
+  product_name_color?: string;
+  price_color?: string;
+  price_background_color?: string;
   icon?: string;
   keywords?: string[];
 }
@@ -69,6 +75,9 @@ export interface UpdateDepartmentData {
   code?: string;
   description?: string;
   color?: string;
+   product_name_color?: string;
+   price_color?: string;
+   price_background_color?: string;
   icon?: string;
   keywords?: string[];
   active?: boolean;

@@ -248,6 +248,9 @@ class Department(db.Model):
     code = db.Column(db.String(20), nullable=False, unique=True)  # Código único (ACG, PAD, HRT)
     description = db.Column(db.Text)  # Descrição do departamento
     color = db.Column(db.String(7), default='#3B82F6')  # Cor tema do departamento (hex)
+    product_name_color = db.Column(db.String(7))  # Cor do nome/descrição do produto no painel
+    price_color = db.Column(db.String(7))  # Cor do valor/preço do produto no painel
+    price_background_color = db.Column(db.String(7))  # Cor de fundo da área de preço
     icon = db.Column(db.String(50), default='Package')  # Ícone do departamento
     keywords = db.Column(db.Text)  # Palavras-chave para categorização automática (JSON array)
     active = db.Column(db.Boolean, default=True)
@@ -274,6 +277,9 @@ class Department(db.Model):
             'code': self.code,
             'description': self.description,
             'color': self.color,
+            'product_name_color': self.product_name_color,
+            'price_color': self.price_color,
+            'price_background_color': self.price_background_color,
             'icon': self.icon,
             'keywords': keywords_list,
             'active': self.active,
@@ -2243,6 +2249,9 @@ def create_department():
             code=data['code'].upper(),
             description=data.get('description', ''),
             color=data.get('color', '#3B82F6'),
+            product_name_color=data.get('product_name_color'),
+            price_color=data.get('price_color'),
+            price_background_color=data.get('price_background_color'),
             icon=data.get('icon', 'Package'),
             keywords=keywords_json
         )
@@ -2289,6 +2298,12 @@ def update_department(department_id):
             department.description = data['description']
         if 'color' in data:
             department.color = data['color']
+        if 'product_name_color' in data:
+            department.product_name_color = data['product_name_color']
+        if 'price_color' in data:
+            department.price_color = data['price_color']
+        if 'price_background_color' in data:
+            department.price_background_color = data['price_background_color']
         if 'icon' in data:
             department.icon = data['icon']
         keywords_changed = False
@@ -3064,10 +3079,39 @@ def create_default_departments():
         db.session.rollback()
         print(f"[ERROR] Erro ao criar departamentos padrão: {e}")
 
+def ensure_department_color_columns():
+    db_path = os.path.join(INSTANCE_DIR, 'paineltv.db')
+    if not os.path.exists(db_path):
+        return
+    import sqlite3
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(department)")
+        columns = [column[1] for column in cursor.fetchall()]
+        if 'product_name_color' not in columns:
+            cursor.execute("ALTER TABLE department ADD COLUMN product_name_color TEXT")
+            print("[DB] Coluna 'product_name_color' criada em department")
+        if 'price_color' not in columns:
+            cursor.execute("ALTER TABLE department ADD COLUMN price_color TEXT")
+            print("[DB] Coluna 'price_color' criada em department")
+        if 'price_background_color' not in columns:
+            cursor.execute("ALTER TABLE department ADD COLUMN price_background_color TEXT")
+            print("[DB] Coluna 'price_background_color' criada em department")
+        conn.commit()
+    except Exception as e:
+        print(f"[DB] Erro ao garantir colunas de cores em department: {e}")
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
 def ensure_db_initialized():
     with app.app_context():
         db.create_all()
         try:
+            ensure_department_color_columns()
             create_admin_user()
             create_default_departments()
         except Exception:
@@ -3149,6 +3193,7 @@ def generate_suggested_code(base_code):
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
+        ensure_department_color_columns()
         create_admin_user()
         create_default_departments()
         try:

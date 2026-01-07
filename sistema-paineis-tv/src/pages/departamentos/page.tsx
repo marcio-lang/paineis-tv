@@ -101,13 +101,20 @@ const DepartamentosPage: React.FC = () => {
     console.log('handleUpdateDepartment - Departamento atual:', editingDepartment);
 
     try {
-      // Simplificação: Enviar todos os campos editáveis diretamente
-      // O backend já verifica se houve mudança antes de validar duplicidade
       const payload: any = {
         name: typeof data.name === 'string' ? data.name.trim() : editingDepartment.name,
         description: typeof data.description === 'string' ? data.description : (editingDepartment.description || ''),
         color: typeof data.color === 'string' ? data.color.trim() : (editingDepartment.color || '#3B82F6'),
-        active: editingDepartment.active // Manter estado ativo atual
+        product_name_color: typeof data.product_name_color === 'string'
+          ? data.product_name_color.trim()
+          : (editingDepartment.product_name_color || '#000000'),
+        price_color: typeof data.price_color === 'string'
+          ? data.price_color.trim()
+          : (editingDepartment.price_color || '#DC2626'),
+        price_background_color: typeof data.price_background_color === 'string'
+          ? data.price_background_color.trim()
+          : (editingDepartment.price_background_color || '#FFFFFF'),
+        active: editingDepartment.active
       };
 
       const nextCodeRaw = typeof data.code === 'string' ? data.code : editingDepartment.code;
