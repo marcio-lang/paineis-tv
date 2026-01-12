@@ -11,6 +11,18 @@ export interface RegisterResponse {
   token: string;
 }
 
+export interface QrInitResponse {
+  session_id: string;
+  expires_at: string;
+}
+
+export interface QrStatusResponse {
+  status: 'pending' | 'approved' | 'expired' | 'cancelled';
+  user?: User;
+  token?: string;
+  expires_at?: string;
+}
+
 export const authService = {
   // Login
   async login(credentials: LoginForm): Promise<LoginResponse> {
@@ -140,5 +152,28 @@ export const authService = {
     }
 
     return response.data;
+  },
+
+  async initQrLogin(): Promise<QrInitResponse> {
+    const response = await api.post<ApiResponse<QrInitResponse>>('/auth/qr/init');
+    if (!response.success || !response.data) {
+      throw new Error(response.message || 'Erro ao iniciar login por QR Code');
+    }
+    return response.data;
+  },
+
+  async getQrLoginStatus(sessionId: string): Promise<QrStatusResponse> {
+    const response = await api.get<ApiResponse<QrStatusResponse>>(`/auth/qr/status/${sessionId}`);
+    if (!response.success || !response.data) {
+      throw new Error(response.message || 'Erro ao verificar status do QR Code');
+    }
+    return response.data;
+  },
+
+  async approveQrLogin(sessionId: string): Promise<void> {
+    const response = await api.post<ApiResponse<null>>('/auth/qr/approve', { session_id: sessionId });
+    if (!response.success) {
+      throw new Error(response.message || 'Erro ao aprovar login por QR Code');
+    }
   }
 };

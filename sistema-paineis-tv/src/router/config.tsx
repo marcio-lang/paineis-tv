@@ -28,6 +28,7 @@ import DepartmentPanelViewPage from '../pages/department-panel-view/page';
 import { TVPanelPage } from '../pages/tv/TVPanelPage';
 import LoginPage from '../pages/auth/login/page';
 import RegisterPage from '../pages/auth/register/page';
+import QrApprovePage from '../pages/auth/qr-approve/page';
 import ForgotPasswordPage from '../pages/auth/forgot-password/page';
 import ResetPasswordPage from '../pages/auth/reset-password/page';
 import TwoFactorPage from '../pages/auth/two-factor/page';
@@ -44,6 +45,10 @@ const routes: RouteObject[] = [
   {
     path: '/login',
     element: <LoginPage />
+  },
+  {
+    path: '/auth/qr-approve',
+    element: <QrApprovePage />
   },
   {
     path: '/auth/register',

@@ -124,7 +124,7 @@ class User(db.Model):
     name = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    role = db.Column(db.String(20), nullable=False, default='user')  # 'admin' ou 'user'
+    role = db.Column(db.String(20), nullable=False, default='user')
     active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=get_brazil_now)
     updated_at = db.Column(db.DateTime, default=get_brazil_now, onupdate=get_brazil_now)
@@ -169,6 +169,16 @@ class User(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
+
+class QrLoginSession(db.Model):
+    __tablename__ = 'qr_login_session'
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    status = db.Column(db.String(20), nullable=False, default='pending')
+    user_id = db.Column(db.String(36), db.ForeignKey('user.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=get_brazil_now)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    approved_at = db.Column(db.DateTime)
+    user = db.relationship('User')
 
 # Novos modelos para o painel de açougue
 class ButcherProduct(db.Model):
@@ -577,6 +587,107 @@ def verify_token():
         'success': True,
         'data': request.current_user.to_dict(),
         'message': 'Token válido'
+    })
+
+@app.route('/api/auth/qr/init', methods=['POST'])
+def init_qr_login():
+    try:
+        expires_at = get_brazil_now() + timedelta(minutes=5)
+        session = QrLoginSession(
+            status='pending',
+            expires_at=expires_at
+        )
+        db.session.add(session)
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'data': {
+                'session_id': session.id,
+                'expires_at': session.expires_at.isoformat()
+            },
+            'message': 'Sessão de QR Code criada'
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao iniciar sessão de QR Code: {str(e)}'
+        }), 500
+
+@app.route('/api/auth/qr/status/<session_id>', methods=['GET'])
+def qr_login_status(session_id):
+    session = QrLoginSession.query.get(session_id)
+    if not session:
+        return jsonify({
+            'success': False,
+            'message': 'Sessão de QR Code não encontrada'
+        }), 404
+    
+    now = get_brazil_now()
+    if session.status == 'pending' and session.expires_at <= now:
+        session.status = 'expired'
+        db.session.commit()
+    
+    if session.status == 'approved' and session.user_id:
+        user = User.query.get(session.user_id)
+        if not user or not user.active:
+            return jsonify({
+                'success': False,
+                'message': 'Usuário da sessão inválido'
+            }), 400
+        token = user.generate_token()
+        return jsonify({
+            'success': True,
+            'data': {
+                'status': session.status,
+                'user': user.to_dict(),
+                'token': token
+            },
+            'message': 'Sessão aprovada'
+        })
+    
+    return jsonify({
+        'success': True,
+        'data': {
+            'status': session.status,
+            'expires_at': session.expires_at.isoformat()
+        },
+        'message': 'Status da sessão retornado'
+    })
+
+@app.route('/api/auth/qr/approve', methods=['POST'])
+@require_auth
+def approve_qr_login():
+    data = request.get_json() or {}
+    session_id = data.get('session_id')
+    if not session_id:
+        return jsonify({
+            'success': False,
+            'message': 'session_id é obrigatório'
+        }), 400
+    
+    session = QrLoginSession.query.get(session_id)
+    if not session:
+        return jsonify({
+            'success': False,
+            'message': 'Sessão de QR Code não encontrada'
+        }), 404
+    
+    now = get_brazil_now()
+    if session.expires_at <= now or session.status != 'pending':
+        return jsonify({
+            'success': False,
+            'message': 'Sessão de QR Code expirada ou inválida'
+        }), 400
+    
+    session.status = 'approved'
+    session.user_id = request.current_user.id
+    session.approved_at = now
+    db.session.commit()
+    
+    return jsonify({
+        'success': True,
+        'message': 'Sessão de QR Code aprovada'
     })
 
 # Rotas de gerenciamento de usuários
@@ -3203,4 +3314,4 @@ if __name__ == '__main__':
             print(f"[DB] Erro ao remover tabela action_link: {str(e)}")
     port = int(os.environ.get('PORT', '5000'))
     debug = os.environ.get('FLASK_DEBUG', os.environ.get('DEBUG', '1')) in ['1', 'true', 'True']
-    app.run(host='0.0.0.0', port=port, debug=debug)
+    app.run(host='127.0.0.1', port=port, debug=debug)

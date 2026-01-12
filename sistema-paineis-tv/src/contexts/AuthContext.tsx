@@ -20,6 +20,7 @@ interface AuthContextType {
   login: (credentials: LoginForm) => Promise<void>;
   register: (userData: RegisterForm) => Promise<void>;
   logout: () => Promise<void>;
+   loginWithToken: (user: User, token: string) => void;
   isLoading: boolean;
   isAuthenticated: boolean;
   hasRole: (role: string) => boolean;
@@ -148,6 +149,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setError(null);
   };
 
+  const loginWithToken = (userData: User, token: string) => {
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(userData));
+    setUser(userData);
+  };
+
   const hasRole = (role: string): boolean => {
     if (!user) return false;
     return hasPermission(user.role, role);
@@ -163,6 +170,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     login,
     register,
     logout,
+    loginWithToken,
     isLoading,
     isAuthenticated,
     hasRole,
