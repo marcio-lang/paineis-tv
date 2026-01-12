@@ -625,8 +625,13 @@ def qr_login_status(session_id):
             }), 404
 
         now = get_brazil_now()
-        if session.status == 'pending' and session.expires_at and session.expires_at <= now:
+        expires_at = session.expires_at
+        if expires_at and expires_at.tzinfo is None:
+            expires_at = BRAZIL_TZ.localize(expires_at)
+
+        if session.status == 'pending' and expires_at and expires_at <= now:
             session.status = 'expired'
+            session.expires_at = expires_at
             db.session.commit()
 
         if session.status == 'approved' and session.user_id:
@@ -651,7 +656,7 @@ def qr_login_status(session_id):
             'success': True,
             'data': {
                 'status': session.status,
-                'expires_at': session.expires_at.isoformat() if session.expires_at else None
+                'expires_at': (expires_at or session.expires_at).isoformat() if (expires_at or session.expires_at) else None
             },
             'message': 'Status da sessão retornado'
         })
