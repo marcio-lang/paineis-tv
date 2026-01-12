@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../../../components/base/Button';
 import { Input } from '../../../components/base/Input';
@@ -25,7 +25,7 @@ export default function LoginPage() {
   const [isQrInitializing, setIsQrInitializing] = useState(false);
   const { login, loginWithToken, error, clearError } = useAuth();
   const navigate = useNavigate();
-  const [pollIntervalId, setPollIntervalId] = useState<number | null>(null);
+  const pollIntervalRef = useRef<number | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     console.log('handleSubmit chamado!');
@@ -77,9 +77,9 @@ export default function LoginPage() {
   };
 
   const stopQrPolling = () => {
-    if (pollIntervalId !== null) {
-      window.clearInterval(pollIntervalId);
-      setPollIntervalId(null);
+    if (pollIntervalRef.current !== null) {
+      window.clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
     }
   };
 
@@ -89,7 +89,7 @@ export default function LoginPage() {
       return;
     }
 
-    if (pollIntervalId !== null) {
+    if (pollIntervalRef.current !== null) {
       return;
     }
 
@@ -116,12 +116,18 @@ export default function LoginPage() {
       }
     }, 2500);
 
-    setPollIntervalId(id);
+    pollIntervalRef.current = id;
 
     return () => {
       window.clearInterval(id);
     };
-  }, [qrStatus, qrSessionId, loginWithToken, navigate, pollIntervalId]);
+  }, [qrStatus, qrSessionId, loginWithToken, navigate]);
+
+  useEffect(() => {
+    return () => {
+      stopQrPolling();
+    };
+  }, []);
 
   useEffect(() => {
     if (!isQrMode) {
