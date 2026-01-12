@@ -579,6 +579,14 @@ def get_current_user():
         'user': request.current_user.to_dict()
     })
 
+@app.route('/api/auth/logout', methods=['POST'])
+@require_auth
+def api_logout():
+    return jsonify({
+        'success': True,
+        'message': 'Logout realizado com sucesso'
+    })
+
 @app.route('/api/auth/verify', methods=['GET'])
 @require_auth
 def verify_token():
