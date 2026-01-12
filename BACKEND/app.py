@@ -616,44 +616,53 @@ def init_qr_login():
 
 @app.route('/api/auth/qr/status/<session_id>', methods=['GET'])
 def qr_login_status(session_id):
-    session = QrLoginSession.query.get(session_id)
-    if not session:
-        return jsonify({
-            'success': False,
-            'message': 'Sessão de QR Code não encontrada'
-        }), 404
-    
-    now = get_brazil_now()
-    if session.status == 'pending' and session.expires_at <= now:
-        session.status = 'expired'
-        db.session.commit()
-    
-    if session.status == 'approved' and session.user_id:
-        user = User.query.get(session.user_id)
-        if not user or not user.active:
+    try:
+        session = QrLoginSession.query.get(session_id)
+        if not session:
             return jsonify({
                 'success': False,
-                'message': 'Usuário da sessão inválido'
-            }), 400
-        token = user.generate_token()
+                'message': 'Sessão de QR Code não encontrada'
+            }), 404
+
+        now = get_brazil_now()
+        if session.status == 'pending' and session.expires_at and session.expires_at <= now:
+            session.status = 'expired'
+            db.session.commit()
+
+        if session.status == 'approved' and session.user_id:
+            user = User.query.get(session.user_id)
+            if not user or not user.active:
+                return jsonify({
+                    'success': False,
+                    'message': 'Usuário da sessão inválido'
+                }), 400
+            token = user.generate_token()
+            return jsonify({
+                'success': True,
+                'data': {
+                    'status': session.status,
+                    'user': user.to_dict(),
+                    'token': token
+                },
+                'message': 'Sessão aprovada'
+            })
+
         return jsonify({
             'success': True,
             'data': {
                 'status': session.status,
-                'user': user.to_dict(),
-                'token': token
+                'expires_at': session.expires_at.isoformat() if session.expires_at else None
             },
-            'message': 'Sessão aprovada'
+            'message': 'Status da sessão retornado'
         })
-    
-    return jsonify({
-        'success': True,
-        'data': {
-            'status': session.status,
-            'expires_at': session.expires_at.isoformat()
-        },
-        'message': 'Status da sessão retornado'
-    })
+    except Exception as e:
+        import traceback
+        print(f"[ERROR] Erro ao obter status do QR Code: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao obter status do QR Code: {str(e)}'
+        }), 500
 
 @app.route('/api/auth/qr/approve', methods=['POST'])
 @require_auth
