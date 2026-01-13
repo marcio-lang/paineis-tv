@@ -680,37 +680,46 @@ def qr_login_status(session_id):
 @app.route('/api/auth/qr/approve', methods=['POST'])
 @require_auth
 def approve_qr_login():
-    data = request.get_json() or {}
-    session_id = data.get('session_id')
-    if not session_id:
+    try:
+        data = request.get_json() or {}
+        session_id = data.get('session_id')
+        if not session_id:
+            return jsonify({
+                'success': False,
+                'message': 'session_id é obrigatório'
+            }), 400
+        
+        session = QrLoginSession.query.get(session_id)
+        if not session:
+            return jsonify({
+                'success': False,
+                'message': 'Sessão de QR Code não encontrada'
+            }), 404
+        
+        now = get_brazil_now()
+        if session.expires_at <= now or session.status != 'pending':
+            return jsonify({
+                'success': False,
+                'message': 'Sessão de QR Code expirada ou inválida'
+            }), 400
+        
+        session.status = 'approved'
+        session.user_id = request.current_user.id
+        session.approved_at = now
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Sessão de QR Code aprovada'
+        })
+    except Exception as e:
+        import traceback
+        print(f"[ERROR] Erro ao aprovar QR Code: {str(e)}")
+        print(traceback.format_exc())
         return jsonify({
             'success': False,
-            'message': 'session_id é obrigatório'
-        }), 400
-    
-    session = QrLoginSession.query.get(session_id)
-    if not session:
-        return jsonify({
-            'success': False,
-            'message': 'Sessão de QR Code não encontrada'
-        }), 404
-    
-    now = get_brazil_now()
-    if session.expires_at <= now or session.status != 'pending':
-        return jsonify({
-            'success': False,
-            'message': 'Sessão de QR Code expirada ou inválida'
-        }), 400
-    
-    session.status = 'approved'
-    session.user_id = request.current_user.id
-    session.approved_at = now
-    db.session.commit()
-    
-    return jsonify({
-        'success': True,
-        'message': 'Sessão de QR Code aprovada'
-    })
+            'message': f'Erro ao aprovar QR Code: {str(e)}'
+        }), 500
 
 # Rotas de gerenciamento de usuários
 @app.route('/api/users', methods=['GET'])
