@@ -690,26 +690,26 @@ def approve_qr_login():
             }), 400
         
         session = QrLoginSession.query.get(session_id)
-    if not session:
-        return jsonify({
-            'success': False,
-            'message': 'Sessão de QR Code não encontrada'
-        }), 404
-    
-    now = get_brazil_now()
-    
-    # Garantir que expires_at tenha timezone para comparação
-    expires_at = session.expires_at
-    if expires_at and expires_at.tzinfo is None:
-        expires_at = BRAZIL_TZ.localize(expires_at)
+        if not session:
+            return jsonify({
+                'success': False,
+                'message': 'Sessão de QR Code não encontrada'
+            }), 404
         
-    if expires_at <= now or session.status != 'pending':
-        return jsonify({
-            'success': False,
-            'message': 'Sessão de QR Code expirada ou inválida'
-        }), 400
-    
-    session.status = 'approved'
+        now = get_brazil_now()
+        
+        # Garantir que expires_at tenha timezone para comparação
+        expires_at = session.expires_at
+        if expires_at and expires_at.tzinfo is None:
+            expires_at = BRAZIL_TZ.localize(expires_at)
+            
+        if expires_at <= now or session.status != 'pending':
+            return jsonify({
+                'success': False,
+                'message': 'Sessão de QR Code expirada ou inválida'
+            }), 400
+        
+        session.status = 'approved'
         session.user_id = request.current_user.id
         session.approved_at = now
         db.session.commit()
