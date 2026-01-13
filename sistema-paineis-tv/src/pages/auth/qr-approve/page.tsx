@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { authService } from '../../../services/authService';
 import { AuthLayout } from '../../../components/layout/Layout';
 import { Button } from '../../../components/base/Button';
@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 
 export default function QrApprovePage() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
@@ -17,11 +18,21 @@ export default function QrApprovePage() {
   };
 
   const handleApprove = async () => {
+    const token = localStorage.getItem('token');
     const sessionId = getSessionId();
     if (!sessionId) {
       setStatus('error');
       setMessage('Sessão inválida para aprovação');
       toast.error('Sessão inválida para aprovação');
+      return;
+    }
+
+    if (!token) {
+      setStatus('error');
+      setMessage('Você precisa estar logado para autorizar este QR Code');
+      toast.error('Faça login para autorizar este QR Code');
+      const returnTo = encodeURIComponent(`/auth/qr-approve?session_id=${sessionId}`);
+      navigate(`/auth/login?returnTo=${returnTo}`);
       return;
     }
 
@@ -46,8 +57,17 @@ export default function QrApprovePage() {
     if (!sessionId) {
       setStatus('error');
       setMessage('Sessão inválida para aprovação');
+      return;
     }
-  }, [location.search]);
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setStatus('error');
+      setMessage('Você precisa estar logado para autorizar este QR Code');
+      const returnTo = encodeURIComponent(`/auth/qr-approve?session_id=${sessionId}`);
+      navigate(`/auth/login?returnTo=${returnTo}`);
+      toast.error('Faça login para autorizar este QR Code');
+    }
+  }, [location.search, navigate]);
 
   return (
     <AuthLayout>
@@ -105,4 +125,3 @@ export default function QrApprovePage() {
     </AuthLayout>
   );
 }
-

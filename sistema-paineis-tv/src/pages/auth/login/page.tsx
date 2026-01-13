@@ -1,6 +1,6 @@
 
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '../../../components/base/Button';
 import { Input } from '../../../components/base/Input';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -25,6 +25,7 @@ export default function LoginPage() {
   const [isQrInitializing, setIsQrInitializing] = useState(false);
   const { login, loginWithToken, error, clearError } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const pollIntervalRef = useRef<number | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -44,9 +45,14 @@ export default function LoginPage() {
       console.log('Login bem-sucedido, redirecionando...');
       toast.success('Login realizado com sucesso!');
       
-      // Aguardar um pouco para garantir que o estado foi atualizado
+      const params = new URLSearchParams(location.search);
+      const returnTo = params.get('returnTo');
       setTimeout(() => {
-        navigate('/');
+        if (returnTo) {
+          navigate(returnTo);
+        } else {
+          navigate('/');
+        }
       }, 100);
       
     } catch (error) {
