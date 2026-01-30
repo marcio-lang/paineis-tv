@@ -3060,6 +3060,13 @@ def perform_sync_department_panel(department_id, panel_id, exact_match=True):
     keep_map = {}
     dup_remove = []
     for assoc in associations:
+        if not assoc.product:
+            try:
+                db.session.delete(assoc)
+                removed_count += 1
+            except Exception:
+                pass
+            continue
         # Removido: Não deletar associações existentes só porque não dão match nas keywords
         # Isso permite que o usuário adicione produtos manualmente sem que eles sejam removidos
         # pname = assoc.product.nome if assoc.product else ''
@@ -3069,7 +3076,7 @@ def perform_sync_department_panel(department_id, panel_id, exact_match=True):
         #     continue
         
         # Apenas verificar duplicatas visuais (mesmo nome e código)
-        pname = assoc.product.nome if assoc.product else ''
+        pname = assoc.product.nome or ''
         key = (_norm(pname), (assoc.product.codigo or '').strip())
         prev = keep_map.get(key)
         if not prev:
