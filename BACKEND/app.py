@@ -3,7 +3,7 @@ from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
-from werkzeug.exceptions import RequestEntityTooLarge
+from werkzeug.exceptions import RequestEntityTooLarge, HTTPException
 from functools import wraps
 import os
 from datetime import datetime, timedelta
@@ -3020,7 +3020,8 @@ def view_department_panel(department_id, panel_id):
                 'footer_text': panel.footer_text
             }
         })
-        
+    except HTTPException as e:
+        return jsonify({'error': e.description}), e.code
     except Exception as e:
         return jsonify({'error': f'Erro ao visualizar painel: {str(e)}'}), 500
 
