@@ -2066,8 +2066,8 @@ def start_toledo_monitor(path, interval_minutes):
         last_mtime = None
         # Regex ajustado para capturar código de 7 dígitos (ex: 0043175) em vez de quebrar em 6+3
         # Antes: r'^(\d{6})(\d{3})(\d{6})(\d{3})([A-Z\s\d]+)\s*kg'
-        # Agora: r'^(\d{2})(\d{7})(\d{6})(\d{3})([A-Z\s\d]+)\s*kg'
-        pat = re.compile(r'^(\d{2})(\d{7})(\d{6})(\d{3})([A-Z\s\d]+)\s*kg', re.IGNORECASE)
+        # Agora: r'^(\d{2})(\d{7})(\d{6})(\d{3})(.+)$'
+        pat = re.compile(r'^(\d{2})(\d{7})(\d{6})(\d{3})(.+)$', re.IGNORECASE)
         while True:
             try:
                 if os.path.exists(path):
@@ -2089,6 +2089,7 @@ def start_toledo_monitor(path, interval_minutes):
                                 
                                 preco_val = round(int(m.group(3)) / 100, 2)
                                 nome_raw = m.group(5).strip()
+                                nome_raw = re.sub(r'\bkg\b', '', nome_raw, flags=re.IGNORECASE).strip()
                             else:
                                 if len(line) < 20:
                                     continue
@@ -2108,8 +2109,7 @@ def start_toledo_monitor(path, interval_minutes):
                                 except Exception:
                                     continue
                                 name_part = line[18:]
-                                idx = name_part.lower().find('kg')
-                                nome_raw = (name_part[:idx] if idx != -1 else name_part).strip()
+                                nome_raw = re.sub(r'\bkg\b', '', name_part, flags=re.IGNORECASE).strip()
                             import re
                             nome_fmt = re.sub(r'(?:\s*[0-9]{4,})+$', '', nome_raw.strip())
                             nome_fmt = re.sub(r'\s+', ' ', nome_fmt)

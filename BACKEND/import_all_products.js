@@ -5,7 +5,7 @@ const http = require('http');
 // Ler o arquivo TXT
 const text = fs.readFileSync('../sistema-paineis-tv/ITENSMGV.TXT', 'utf8');
 const lines = text.split('\n');
-const pattern = /^(\d{6})(\d{3})(\d{6})(\d{3})([A-Z\s\d]+)\s*kg/;
+const pattern = /^(\d{6})(\d{3})(\d{6})(\d{3})(.+)$/;
 
 console.log('🔄 Processando arquivo TXT...');
 console.log('📄 Total de linhas:', lines.length);
@@ -28,6 +28,7 @@ for (let i = 0; i < lines.length; i++) {
       const preco = precoEmCentavos / 100;
       
       // Limpeza e formatação do nome
+      nome = nome.replace(/\bkg\b/gi, '').trim();
       nome = nome.replace(/^\d+/, ''); // Remover números no início
       nome = nome.trim(); // Remover espaços extras
       

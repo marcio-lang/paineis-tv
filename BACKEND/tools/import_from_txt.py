@@ -26,8 +26,7 @@ def parse_items(txt_path: str):
             except Exception:
                 continue
             name_part = ln[18:]
-            idx = name_part.lower().find('kg')
-            nome_raw = (name_part[:idx] if idx != -1 else name_part).strip()
+            nome_raw = re.sub(r'\bkg\b', '', name_part, flags=re.IGNORECASE).strip()
         
         cm = re.search(r'\bKG\b\s*0*(\d{3,7})\s*$', ln, re.IGNORECASE)
         # Usar grupo 2 (7 dígitos) convertido para int para remover zeros à esquerda
