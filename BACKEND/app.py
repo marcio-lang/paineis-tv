@@ -1881,10 +1881,17 @@ def import_processed_butcher_data():
         )
         job.valid_count = res.get('imported_count', 0)
         job.quarantine_count = res.get('quarantine_count', 0)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
         return jsonify(res)
     
     except Exception as e:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         return jsonify({'error': f'Erro ao processar dados: {str(e)}'}), 400
 
 @app.route('/api/acougue/import-from-txt', methods=['POST'])
@@ -2023,10 +2030,12 @@ def import_processed_butcher_data_inner(produtos_data, official_code_map=None, p
             norm_name = item.get('norm_name') or _norm(nome)
             existing = existing_by_code.get(codigo) or existing_by_norm.get(norm_name)
             if existing:
-                if desired_code != existing.codigo:
-                    conflict = existing_by_code.get(desired_code)
-                    if not conflict or conflict.id == existing.id:
-                        existing.codigo = desired_code
+                if codigo != existing.codigo:
+                    conflict = existing_by_code.get(codigo)
+                    if conflict and conflict.id != existing.id:
+                        errors.append(f"Conflito de código {codigo} para {nome} - mantendo {existing.codigo}")
+                    else:
+                        existing.codigo = codigo
                 from difflib import SequenceMatcher
                 delta_pct = None
                 try:
@@ -2085,7 +2094,12 @@ def import_processed_butcher_data_inner(produtos_data, official_code_map=None, p
         except Exception as e:
             errors.append(f"Erro ao importar produto {item.get('nome', 'desconhecido')}: {str(e)}")
     if not preview:
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            errors.append(f"Erro ao salvar importação: {str(e)}")
+            success_count = 0
     return {'imported_count': success_count, 'errors': errors, 'quarantine_count': quarantine_count, 'preview': preview}
 
 def _norm_name(s):
