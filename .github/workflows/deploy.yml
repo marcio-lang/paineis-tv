@@ -47,6 +47,7 @@ jobs:
             exit 1
           fi
       - run: |
+          set -e
           mkdir -p ~/.ssh
           touch ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
@@ -55,15 +56,16 @@ jobs:
             chmod 600 ~/.ssh/id_rsa
             echo "USE_SSHPASS=0" >> "$GITHUB_ENV"
           else
-            sudo apt-get update
+            sudo apt-get update -y
             sudo apt-get install -y sshpass
             echo "USE_SSHPASS=1" >> "$GITHUB_ENV"
           fi
-          ssh-keyscan -p "${DEPLOY_PORT:-22}" "${DEPLOY_HOST}" >> ~/.ssh/known_hosts
+          ssh-keyscan -p "${DEPLOY_PORT:-22}" "${DEPLOY_HOST}" >> ~/.ssh/known_hosts 2>/dev/null || echo "ssh-keyscan falhou; seguindo com StrictHostKeyChecking=no"
+          echo "SSH_OPTS=-p ${DEPLOY_PORT:-22} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" >> "$GITHUB_ENV"
       - run: |
           set -e
           if [ "${USE_SSHPASS}" = "1" ]; then
-            sshpass -e ssh -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "\
+            sshpass -e ssh ${SSH_OPTS} "${DEPLOY_USER}@${DEPLOY_HOST}" "\
               set -e; \
               SUDO=''; if command -v sudo >/dev/null 2>&1; then SUDO='sudo'; fi; \
               \$SUDO mkdir -p '${TARGET_DIR}' '${FRONT_DIST_DIR}'; \
@@ -71,7 +73,7 @@ jobs:
               if ! python3 -c 'import venv' >/dev/null 2>&1; then \$SUDO apt-get update -y && \$SUDO apt-get install -y python3-venv; fi \
             "
           else
-            ssh -i ~/.ssh/id_rsa -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "\
+            ssh -i ~/.ssh/id_rsa ${SSH_OPTS} "${DEPLOY_USER}@${DEPLOY_HOST}" "\
               set -e; \
               SUDO=''; if command -v sudo >/dev/null 2>&1; then SUDO='sudo'; fi; \
               \$SUDO mkdir -p '${TARGET_DIR}' '${FRONT_DIST_DIR}'; \
@@ -84,60 +86,60 @@ jobs:
       - run: |
           set -e
           if [ "${USE_SSHPASS}" = "1" ]; then
-            sshpass -e rsync -az --delete --rsync-path="sudo rsync" -e "ssh -p ${DEPLOY_PORT:-22}" --exclude ".git" --exclude "node_modules" --exclude "BACKEND/venv" --exclude "BACKEND/.venv" --exclude "BACKEND/uploads" --exclude "BACKEND/instance" ./ "${DEPLOY_USER}@${DEPLOY_HOST}:${TARGET_DIR}/"
+            sshpass -e rsync -az --delete --rsync-path="sudo rsync" -e "ssh ${SSH_OPTS}" --exclude ".git" --exclude "node_modules" --exclude "BACKEND/venv" --exclude "BACKEND/.venv" --exclude "BACKEND/uploads" --exclude "BACKEND/instance" ./ "${DEPLOY_USER}@${DEPLOY_HOST}:${TARGET_DIR}/"
           else
-            rsync -az --delete --rsync-path="sudo rsync" -e "ssh -i ~/.ssh/id_rsa -p ${DEPLOY_PORT:-22}" --exclude ".git" --exclude "node_modules" --exclude "BACKEND/venv" --exclude "BACKEND/.venv" --exclude "BACKEND/uploads" --exclude "BACKEND/instance" ./ "${DEPLOY_USER}@${DEPLOY_HOST}:${TARGET_DIR}/"
+            rsync -az --delete --rsync-path="sudo rsync" -e "ssh -i ~/.ssh/id_rsa ${SSH_OPTS}" --exclude ".git" --exclude "node_modules" --exclude "BACKEND/venv" --exclude "BACKEND/.venv" --exclude "BACKEND/uploads" --exclude "BACKEND/instance" ./ "${DEPLOY_USER}@${DEPLOY_HOST}:${TARGET_DIR}/"
           fi
         env:
           SSHPASS: ${{ env.DEPLOY_PASSWORD }}
       - run: |
           set -e
           if [ "${USE_SSHPASS}" = "1" ]; then
-            sshpass -e ssh -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "python3 -m venv ${TARGET_DIR}/BACKEND/.venv && ${TARGET_DIR}/BACKEND/.venv/bin/pip install --upgrade pip && ${TARGET_DIR}/BACKEND/.venv/bin/pip install -r ${TARGET_DIR}/BACKEND/requirements.txt"
+            sshpass -e ssh ${SSH_OPTS} "${DEPLOY_USER}@${DEPLOY_HOST}" "python3 -m venv ${TARGET_DIR}/BACKEND/.venv && ${TARGET_DIR}/BACKEND/.venv/bin/pip install --upgrade pip && ${TARGET_DIR}/BACKEND/.venv/bin/pip install -r ${TARGET_DIR}/BACKEND/requirements.txt"
           else
-            ssh -i ~/.ssh/id_rsa -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "python3 -m venv ${TARGET_DIR}/BACKEND/.venv && ${TARGET_DIR}/BACKEND/.venv/bin/pip install --upgrade pip && ${TARGET_DIR}/BACKEND/.venv/bin/pip install -r ${TARGET_DIR}/BACKEND/requirements.txt"
+            ssh -i ~/.ssh/id_rsa ${SSH_OPTS} "${DEPLOY_USER}@${DEPLOY_HOST}" "python3 -m venv ${TARGET_DIR}/BACKEND/.venv && ${TARGET_DIR}/BACKEND/.venv/bin/pip install --upgrade pip && ${TARGET_DIR}/BACKEND/.venv/bin/pip install -r ${TARGET_DIR}/BACKEND/requirements.txt"
           fi
         env:
           SSHPASS: ${{ env.DEPLOY_PASSWORD }}
       - run: |
           set -e
           if [ "${USE_SSHPASS}" = "1" ]; then
-            sshpass -e ssh -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "bash ${TARGET_DIR}/scripts/setup-backend-service.sh"
+            sshpass -e ssh ${SSH_OPTS} "${DEPLOY_USER}@${DEPLOY_HOST}" "bash ${TARGET_DIR}/scripts/setup-backend-service.sh"
           else
-            ssh -i ~/.ssh/id_rsa -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "bash ${TARGET_DIR}/scripts/setup-backend-service.sh"
+            ssh -i ~/.ssh/id_rsa ${SSH_OPTS} "${DEPLOY_USER}@${DEPLOY_HOST}" "bash ${TARGET_DIR}/scripts/setup-backend-service.sh"
           fi
         env:
           SSHPASS: ${{ env.DEPLOY_PASSWORD }}
       - run: |
           set -e
           if [ "${USE_SSHPASS}" = "1" ]; then
-            sshpass -e ssh -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "mkdir -p ${FRONT_DIST_DIR} && rsync -az --delete ${TARGET_DIR}/sistema-paineis-tv/dist/ ${FRONT_DIST_DIR}/"
+            sshpass -e ssh ${SSH_OPTS} "${DEPLOY_USER}@${DEPLOY_HOST}" "mkdir -p ${FRONT_DIST_DIR} && rsync -az --delete ${TARGET_DIR}/sistema-paineis-tv/dist/ ${FRONT_DIST_DIR}/"
           else
-            ssh -i ~/.ssh/id_rsa -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "mkdir -p ${FRONT_DIST_DIR} && rsync -az --delete ${TARGET_DIR}/sistema-paineis-tv/dist/ ${FRONT_DIST_DIR}/"
+            ssh -i ~/.ssh/id_rsa ${SSH_OPTS} "${DEPLOY_USER}@${DEPLOY_HOST}" "mkdir -p ${FRONT_DIST_DIR} && rsync -az --delete ${TARGET_DIR}/sistema-paineis-tv/dist/ ${FRONT_DIST_DIR}/"
           fi
         env:
           SSHPASS: ${{ env.DEPLOY_PASSWORD }}
       - run: |
           if [ "${USE_SSHPASS}" = "1" ]; then
-            sshpass -e ssh -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "systemctl restart paineltv-backend || true"
+            sshpass -e ssh ${SSH_OPTS} "${DEPLOY_USER}@${DEPLOY_HOST}" "systemctl restart paineltv-backend || true"
           else
-            ssh -i ~/.ssh/id_rsa -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "systemctl restart paineltv-backend || true"
+            ssh -i ~/.ssh/id_rsa ${SSH_OPTS} "${DEPLOY_USER}@${DEPLOY_HOST}" "systemctl restart paineltv-backend || true"
           fi
         env:
           SSHPASS: ${{ env.DEPLOY_PASSWORD }}
       - run: |
           if [ "${USE_SSHPASS}" = "1" ]; then
-            sshpass -e ssh -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "systemctl reload nginx || true"
+            sshpass -e ssh ${SSH_OPTS} "${DEPLOY_USER}@${DEPLOY_HOST}" "systemctl reload nginx || true"
           else
-            ssh -i ~/.ssh/id_rsa -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "systemctl reload nginx || true"
+            ssh -i ~/.ssh/id_rsa ${SSH_OPTS} "${DEPLOY_USER}@${DEPLOY_HOST}" "systemctl reload nginx || true"
           fi
         env:
           SSHPASS: ${{ env.DEPLOY_PASSWORD }}
       - run: |
           if [ "${USE_SSHPASS}" = "1" ]; then
-            sshpass -e ssh -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "curl -sS -f http://127.0.0.1:5000/api/health || true"
+            sshpass -e ssh ${SSH_OPTS} "${DEPLOY_USER}@${DEPLOY_HOST}" "curl -sS -f http://127.0.0.1:5000/api/health || true"
           else
-            ssh -i ~/.ssh/id_rsa -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" "curl -sS -f http://127.0.0.1:5000/api/health || true"
+            ssh -i ~/.ssh/id_rsa ${SSH_OPTS} "${DEPLOY_USER}@${DEPLOY_HOST}" "curl -sS -f http://127.0.0.1:5000/api/health || true"
           fi
         env:
           SSHPASS: ${{ env.DEPLOY_PASSWORD }}
