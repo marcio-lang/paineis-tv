@@ -3093,6 +3093,25 @@ def perform_sync_department_panel(department_id, panel_id, exact_match=True):
                 keywords = [str(k).strip() for k in parsed if str(k).strip()]
         except Exception:
             keywords = [k.strip() for k in raw.split(',') if k.strip()]
+    default_keywords = {
+        'ACG': ['carne', 'boi', 'porco', 'frango', 'linguiça', 'costela', 'picanha', 'alcatra', 'maminha', 'patinho', 'acém', 'músculo'],
+        'PAD': ['pão', 'bolo', 'torta', 'biscoito', 'doce', 'salgado', 'croissant', 'sonho', 'rosquinha', 'broa'],
+        'HRT': ['alface', 'tomate', 'cebola', 'batata', 'cenoura', 'abobrinha', 'pepino', 'pimentão', 'banana', 'maçã', 'laranja', 'limão']
+    }
+    base = default_keywords.get(department.code, [])
+    if base:
+        merged = []
+        seen = set()
+        for k in (keywords + base):
+            ks = str(k).strip()
+            if not ks:
+                continue
+            kl = ks.lower()
+            if kl in seen:
+                continue
+            seen.add(kl)
+            merged.append(ks)
+        keywords = merged
     from unicodedata import normalize, combining
     import re
     def _norm(s):
@@ -3166,9 +3185,10 @@ def perform_sync_department_panel(department_id, panel_id, exact_match=True):
             # Se o painel já tem produtos, só adiciona se o produto for muito recente (criado nos últimos 5 min)
             # Isso evita que produtos antigos removidos manualmente voltem a aparecer
             is_new_product = False
-            if product.created_at:
+            ref_dt = product.updated_at or product.created_at
+            if ref_dt:
                 try:
-                    delta = get_brazil_now() - product.created_at
+                    delta = get_brazil_now() - ref_dt
                     # Considera "novo" se criado nos últimos 10 minutos (tempo suficiente para o ciclo do monitor)
                     if delta.total_seconds() < 600: 
                         is_new_product = True
@@ -3177,7 +3197,7 @@ def perform_sync_department_panel(department_id, panel_id, exact_match=True):
             
             # Se o painel está vazio, popula tudo (primeira carga)
             # Se não, só adiciona se for produto novo
-            if not has_any_association or is_new_product:
+            if not has_any_association or is_new_product or exact_match:
                 key = (_norm(product.nome), (product.codigo or '').strip())
                 prev = grouped.get(key)
                 if not prev:
