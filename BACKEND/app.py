@@ -1908,10 +1908,11 @@ def import_from_txt_path():
             if not m:
                 continue
             
-            # Tentar encontrar código alternativo no fim da linha (ex: kg 00175)
-            cm = re.search(r"\bKG\b\s*0*(\d{3,7})\s*$", ln, re.IGNORECASE)
-            # Se não achar no fim, usa o grupo 2 (7 dígitos) e converte para int para remover zeros à esquerda
-            codigo = (cm.group(1) if cm else str(int(m.group(2))))
+            codes = [mm.group(1) for mm in re.finditer(r"\bKG\b\s*0*(\d{3,10})(?=\D|$)", ln, re.IGNORECASE)]
+            if codes:
+                codigo = str(int(codes[-1]))
+            else:
+                codigo = str(int(m.group(2)))
             
             preco_val = round(int(m.group(3)) / 100, 2)
             nome_raw = m.group(5).strip()
@@ -1956,7 +1957,33 @@ def import_processed_butcher_data_inner(produtos_data, official_code_map=None, p
     price_delta_limit_pct = float(price_delta_limit_pct or 0)
     name_similarity_min = float(name_similarity_min or 0)
 
-    # Pré-agregar por código: maior preço vence entre duplicatas
+    existing_products = ButcherProduct.query.all()
+    products_for_maps = list(existing_products)
+    if not preview and existing_products:
+        groups = {}
+        for p in existing_products:
+            groups.setdefault(_norm(p.nome), []).append(p)
+        removed_ids = set()
+        for _, group in groups.items():
+            if len(group) <= 1:
+                continue
+            def _price(p):
+                try:
+                    return float(p.preco or 0)
+                except Exception:
+                    return 0.0
+            primary = max(group, key=_price)
+            for p in group:
+                if p.id == primary.id:
+                    continue
+                ProductPanelAssociation.query.filter_by(product_id=p.id).delete()
+                db.session.delete(p)
+                removed_ids.add(p.id)
+        if removed_ids:
+            products_for_maps = [p for p in existing_products if p.id not in removed_ids]
+    existing_by_code = {p.codigo: p for p in products_for_maps}
+    existing_by_norm = {_norm(p.nome): p for p in products_for_maps}
+
     aggregated = {}
     for produto_data in produtos_data:
         nome = produto_data.get('nome', produto_data.get('name'))
@@ -1973,24 +2000,33 @@ def import_processed_butcher_data_inner(produtos_data, official_code_map=None, p
         except Exception:
             errors.append(f"Produto {nome} possui preço inválido - ignorado")
             continue
-        prev = aggregated.get(codigo)
+        norm_name = _norm(nome)
+        desired_code = official_code_map.get(norm_name, codigo)
+        prev = aggregated.get(norm_name)
         if not prev or (preco_decimal is not None and prev['preco'] is not None and preco_decimal > prev['preco']):
-            aggregated[codigo] = {
-                'codigo': codigo,
+            aggregated[norm_name] = {
+                'codigo': desired_code,
                 'nome': nome,
                 'preco': preco_decimal,
                 'ativo': ativo,
+                'norm_name': norm_name
             }
 
     quarantine_count = 0
     conflicts = []
-    for codigo, item in aggregated.items():
+    for _, item in aggregated.items():
         try:
             nome = item['nome']
             preco_decimal = item['preco']
             ativo = item['ativo']
-            existing = ButcherProduct.query.filter_by(codigo=codigo).first()
+            codigo = item['codigo']
+            norm_name = item.get('norm_name') or _norm(nome)
+            existing = existing_by_code.get(codigo) or existing_by_norm.get(norm_name)
             if existing:
+                if desired_code != existing.codigo:
+                    conflict = existing_by_code.get(desired_code)
+                    if not conflict or conflict.id == existing.id:
+                        existing.codigo = desired_code
                 from difflib import SequenceMatcher
                 delta_pct = None
                 try:
@@ -2041,6 +2077,8 @@ def import_processed_butcher_data_inner(produtos_data, official_code_map=None, p
                     posicao_disponivel = 1
                     while posicao_disponivel in posicoes_ocupadas:
                         posicao_disponivel += 1
+                    if codigo in existing_by_code:
+                        codigo = existing_by_code[codigo].codigo
                     product = ButcherProduct(codigo=codigo, nome=nome, preco=preco_decimal, posicao=posicao_disponivel, ativo=ativo)
                     db.session.add(product)
             success_count += 1
@@ -2079,11 +2117,10 @@ def start_toledo_monitor(path, interval_minutes):
                             line = ln.rstrip()
                             m = pat.match(line)
                             if m:
-                                cm = re.search(r"\bKG\b\s*0*(\d{3,7})\s*$", line, re.IGNORECASE)
-                                if cm:
-                                    codigo = cm.group(1)
+                                codes = [mm.group(1) for mm in re.finditer(r"\bKG\b\s*0*(\d{3,10})(?=\D|$)", line, re.IGNORECASE)]
+                                if codes:
+                                    codigo = str(int(codes[-1]))
                                 else:
-                                    # Fallback: remove zeros à esquerda do grupo 2 se não encontrar KG
                                     raw_code = m.group(2)
                                     codigo = str(int(raw_code))
                                 
@@ -2093,9 +2130,9 @@ def start_toledo_monitor(path, interval_minutes):
                             else:
                                 if len(line) < 20:
                                     continue
-                                cm = re.search(r"\bKG\b\s*0*(\d{3,7})\s*$", line, re.IGNORECASE)
-                                if cm:
-                                    codigo = cm.group(1)
+                                codes = [mm.group(1) for mm in re.finditer(r"\bKG\b\s*0*(\d{3,10})(?=\D|$)", line, re.IGNORECASE)]
+                                if codes:
+                                    codigo = str(int(codes[-1]))
                                 else:
                                     # Fallback: tenta pegar da posição fixa e remover zeros
                                     raw_code = line[6:9]
