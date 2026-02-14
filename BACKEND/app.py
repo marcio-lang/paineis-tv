@@ -1302,7 +1302,7 @@ def get_player_data(fixed_url):
                 'name': panel.name,
                 'layout_type': panel.layout_type,
                 'fixed_url': panel.fixed_url,
-                'polling_interval': panel.polling_interval
+                'polling_interval': getattr(panel, 'polling_interval', None) or 60
             },
             'actions': actions_data
         })
@@ -1448,7 +1448,7 @@ def get_panel_play_data(panel_id):
                 'name': panel.name,
                 'layout_type': panel.layout_type,
                 'fixed_url': panel.fixed_url,
-                'polling_interval': panel.polling_interval
+                'polling_interval': getattr(panel, 'polling_interval', None) or 60
             },
             'actions': actions_data
         })
