@@ -24,6 +24,7 @@ interface Panel {
   name: string;
   layout_type: string;
   fixed_url?: string;
+  polling_interval?: number;
 }
 
 interface PanelData {
@@ -194,9 +195,11 @@ const PlayerTVPage: React.FC = () => {
     console.log('Player iniciado para painel:', panelId || fixedUrl);
     console.log('API URL:', API_URL);
     fetchPanelData();
-    const interval = setInterval(fetchPanelData, 60000);
+    const pollingSeconds = panelData?.panel?.polling_interval ?? 60;
+    const pollingMs = Math.max(1, Number(pollingSeconds) || 60) * 1000;
+    const interval = setInterval(fetchPanelData, pollingMs);
     return () => clearInterval(interval);
-  }, [fetchPanelData]);
+  }, [fetchPanelData, panelData?.panel?.polling_interval]);
 
   // Effect para gerenciar ações
   useEffect(() => {

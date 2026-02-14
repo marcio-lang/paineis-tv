@@ -139,12 +139,12 @@ class DepartmentService {
   }
 
   async updateDepartmentPanel(panelId: string, data: UpdatePanelData): Promise<DepartmentPanel> {
-    const response = await api.put(`/panels/${panelId}`, data);
+    const response = await api.put(`/department-panels/${panelId}`, data);
     return response;
   }
 
   async deleteDepartmentPanel(panelId: string): Promise<void> {
-    await api.delete(`/panels/${panelId}`);
+    await api.delete(`/department-panels/${panelId}`);
   }
 
   // Associações Produto-Painel

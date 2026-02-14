@@ -190,9 +190,9 @@ export const StandardTVPanel: React.FC<StandardTVPanelProps> = ({
     const interval = setInterval(() => {
       const totalPages = Math.max(1, Math.ceil(products.length / PAGE_SIZE));
       setPageIndex(prev => (prev + 1) % totalPages);
-    }, 6000);
+    }, Math.max(1, Number(config?.polling_interval ?? 6) || 6) * 1000);
     return () => clearInterval(interval);
-  }, [products.length]);
+  }, [products.length, config?.polling_interval]);
 
   return (
     <AnimatedPage>

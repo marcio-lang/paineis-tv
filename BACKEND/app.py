@@ -1301,7 +1301,8 @@ def get_player_data(fixed_url):
                 'id': panel.id,
                 'name': panel.name,
                 'layout_type': panel.layout_type,
-                'fixed_url': panel.fixed_url
+                'fixed_url': panel.fixed_url,
+                'polling_interval': panel.polling_interval
             },
             'actions': actions_data
         })
@@ -1446,7 +1447,8 @@ def get_panel_play_data(panel_id):
                 'id': panel.id,
                 'name': panel.name,
                 'layout_type': panel.layout_type,
-                'fixed_url': panel.fixed_url
+                'fixed_url': panel.fixed_url,
+                'polling_interval': panel.polling_interval
             },
             'actions': actions_data
         })
@@ -1915,7 +1917,7 @@ def import_from_txt_path():
             if not m:
                 continue
             
-            codes = [mm.group(1) for mm in re.finditer(r"\bKG\b\s*0*(\d{3,10})(?=\D|$)", ln, re.IGNORECASE)]
+            codes = [mm.group(1) for mm in re.finditer(r"\b(?:KG|UN)\b\s*0*(\d{3,10})(?=\D|$)", ln, re.IGNORECASE)]
             if codes:
                 codigo = str(int(codes[-1]))
             else:
@@ -1924,7 +1926,7 @@ def import_from_txt_path():
             preco_val = round(int(m.group(3)) / 100, 2)
             nome_raw = m.group(5).strip()
             # Limpar "kg" do nome se existir
-            nome_raw = re.sub(r'\bkg\b', '', nome_raw, flags=re.IGNORECASE).strip()
+            nome_raw = re.sub(r'\b(?:kg|un)\b', '', nome_raw, flags=re.IGNORECASE).strip()
             nome_fmt = nome_raw.title()
             produtos.append({'codigo': codigo, 'name': nome_fmt, 'price': preco_val, 'is_active': True})
         import unicodedata, re
@@ -2131,7 +2133,7 @@ def start_toledo_monitor(path, interval_minutes):
                             line = ln.rstrip()
                             m = pat.match(line)
                             if m:
-                                codes = [mm.group(1) for mm in re.finditer(r"\bKG\b\s*0*(\d{3,10})(?=\D|$)", line, re.IGNORECASE)]
+                                codes = [mm.group(1) for mm in re.finditer(r"\b(?:KG|UN)\b\s*0*(\d{3,10})(?=\D|$)", line, re.IGNORECASE)]
                                 if codes:
                                     codigo = str(int(codes[-1]))
                                 else:
@@ -2140,11 +2142,11 @@ def start_toledo_monitor(path, interval_minutes):
                                 
                                 preco_val = round(int(m.group(3)) / 100, 2)
                                 nome_raw = m.group(5).strip()
-                                nome_raw = re.sub(r'\bkg\b', '', nome_raw, flags=re.IGNORECASE).strip()
+                                nome_raw = re.sub(r'\b(?:kg|un)\b', '', nome_raw, flags=re.IGNORECASE).strip()
                             else:
                                 if len(line) < 20:
                                     continue
-                                codes = [mm.group(1) for mm in re.finditer(r"\bKG\b\s*0*(\d{3,10})(?=\D|$)", line, re.IGNORECASE)]
+                                codes = [mm.group(1) for mm in re.finditer(r"\b(?:KG|UN)\b\s*0*(\d{3,10})(?=\D|$)", line, re.IGNORECASE)]
                                 if codes:
                                     codigo = str(int(codes[-1]))
                                 else:
@@ -2160,7 +2162,7 @@ def start_toledo_monitor(path, interval_minutes):
                                 except Exception:
                                     continue
                                 name_part = line[18:]
-                                nome_raw = re.sub(r'\bkg\b', '', name_part, flags=re.IGNORECASE).strip()
+                                nome_raw = re.sub(r'\b(?:kg|un)\b', '', name_part, flags=re.IGNORECASE).strip()
                             import re
                             nome_fmt = re.sub(r'(?:\s*[0-9]{4,})+$', '', nome_raw.strip())
                             nome_fmt = re.sub(r'\s+', ' ', nome_fmt)
@@ -2622,7 +2624,7 @@ def create_department_panel(department_id):
         db.session.rollback()
         return jsonify({'error': f'Erro ao criar painel: {str(e)}'}), 500
 
-@app.route('/api/panels/<panel_id>', methods=['PUT'])
+@app.route('/api/department-panels/<panel_id>', methods=['PUT'])
 def update_department_panel(panel_id):
     """Atualizar painel de departamento"""
     try:
@@ -2665,7 +2667,7 @@ def update_department_panel(panel_id):
         db.session.rollback()
         return jsonify({'error': f'Erro ao atualizar painel: {str(e)}'}), 500
 
-@app.route('/api/panels/<panel_id>', methods=['DELETE'])
+@app.route('/api/department-panels/<panel_id>', methods=['DELETE'])
 def delete_department_panel(panel_id):
     """Excluir painel de departamento"""
     try:

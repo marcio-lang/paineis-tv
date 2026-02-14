@@ -15,8 +15,8 @@ def parse_items(txt_path: str):
         if m:
             preco = round(int(m.group(3)) / 100, 2)
             nome_raw = m.group(5).strip()
-            # Limpar "kg" do nome
-            nome_raw = re.sub(r'\bkg\b', '', nome_raw, flags=re.IGNORECASE).strip()
+            # Limpar "kg"/"un" do nome
+            nome_raw = re.sub(r'\b(?:kg|un)\b', '', nome_raw, flags=re.IGNORECASE).strip()
         else:
             if len(ln) < 20:
                 continue
@@ -26,9 +26,9 @@ def parse_items(txt_path: str):
             except Exception:
                 continue
             name_part = ln[18:]
-            nome_raw = re.sub(r'\bkg\b', '', name_part, flags=re.IGNORECASE).strip()
+            nome_raw = re.sub(r'\b(?:kg|un)\b', '', name_part, flags=re.IGNORECASE).strip()
         
-        cm = re.search(r'\bKG\b\s*0*(\d{3,7})\s*$', ln, re.IGNORECASE)
+        cm = re.search(r'\b(?:KG|UN)\b\s*0*(\d{3,10})(?=\D|$)', ln, re.IGNORECASE)
         # Usar grupo 2 (7 dígitos) convertido para int para remover zeros à esquerda
         codigo = (cm.group(1) if cm else (str(int(m.group(2))) if m else ln[6:9]))
         nome = re.sub(r'(?:\s*[0-9]{4,})+$', '', nome_raw.strip())
