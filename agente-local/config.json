@@ -1,6 +1,6 @@
 {
   "arquivo_monitorado": "C:\\SGLinx\\TOLEDO\\ITENSMGV.TXT",
-  "api_url": "http://ofertascaique.cloud/api/importar-precos",
+  "api_url": "https://ofertascaique.cloud/api/importar-precos",
   "token": "1gpQ7KwzmmLJeJr7nzC5LpkjSJCZMRhG25UpHNNnYX4LgjopdC6BGpEKulEH8HB-",
   "debounce_segundos": 10,
   "retry_segundos": 60
