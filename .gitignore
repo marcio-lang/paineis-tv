@@ -3,6 +3,7 @@ BACKEND/venv/
 BACKEND/__pycache__/
 BACKEND/instance/paineltv.db
 BACKEND/uploads/
+BACKEND/importacoes/
 
 sistema-paineis-tv/node_modules/
 sistema-paineis-tv/dist/
@@ -19,3 +20,8 @@ Thumbs.db
 *.zip
 *.tar.gz
 *.db
+*.pyc
+__pycache__/
+
+agente-local/logs/
+agente-local/pendentes/

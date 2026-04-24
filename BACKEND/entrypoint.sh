@@ -5,10 +5,10 @@
 echo "🔧 Iniciando correção de permissões SQLite..."
 
 # Criar diretórios se não existirem
-mkdir -p /app/uploads /app/instance
+mkdir -p /app/uploads /app/instance /app/importacoes
 
 # Corrigir permissões dos diretórios
-chmod -R 755 /app/uploads /app/instance
+chmod -R 755 /app/uploads /app/instance /app/importacoes
 
 # Se o banco SQLite existe, corrigir suas permissões
 if [ -f "/app/instance/paineltv.db" ]; then
@@ -20,6 +20,7 @@ fi
 
 # Garantir que o diretório instance seja gravável
 chmod 777 /app/instance
+chmod 777 /app/importacoes
 
 echo "✅ Permissões corrigidas com sucesso!"
 

@@ -1,0 +1,19 @@
+services:
+  backend:
+    build:
+      context: ./BACKEND
+      dockerfile: Dockerfile
+    container_name: paineis-tv-backend
+    restart: unless-stopped
+    environment:
+      PORT: 5000
+      FLASK_DEBUG: 0
+      TOLEDO_MONITOR_ENABLED: 0
+      UPLOAD_PATH: /app/importacoes
+      SYNC_TOKEN: ${SYNC_TOKEN:-1gpQ7KwzmmLJeJr7nzC5LpkjSJCZMRhG25UpHNNnYX4LgjopdC6BGpEKulEH8HB-}
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./BACKEND/instance:/app/instance
+      - ./BACKEND/uploads:/app/uploads
+      - ./BACKEND/importacoes:/app/importacoes

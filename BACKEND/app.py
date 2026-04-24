@@ -13,7 +13,10 @@ import re
 import jwt
 import threading
 import time
+import shutil
 from sqlalchemy import text
+from routes.sync import create_sync_blueprint
+from services.price_sync_service import ensure_directory, prepare_price_import
 
 app = Flask(__name__)
 
@@ -29,6 +32,19 @@ CORS(app,
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 INSTANCE_DIR = os.path.join(BASE_DIR, 'instance')
 os.makedirs(INSTANCE_DIR, exist_ok=True)
+SYNC_UPLOAD_PATH = os.environ.get('UPLOAD_PATH') or os.path.join(BASE_DIR, 'importacoes')
+ensure_directory(SYNC_UPLOAD_PATH)
+SYNC_RUNTIME_STATUS = {
+    'enabled': True,
+    'state': 'idle',
+    'last_job_id': None,
+    'last_filename': None,
+    'last_source': None,
+    'last_received_at': None,
+    'last_completed_at': None,
+    'last_error': None,
+    'last_result': None,
+}
 
 # Configuração do banco de dados - usar SQLite sempre
 DATABASE_URL = os.environ.get('DATABASE_URL')
@@ -2229,6 +2245,167 @@ try:
         print('[MONITOR]', 'started', watch_path, watch_interval)
 except Exception as _e:
     print('[MONITOR]', 'startup error', str(_e))
+
+
+def sync_default_department_panels_after_import():
+    synced_panels = 0
+    sync_errors = []
+    departments = Department.query.filter_by(active=True).all()
+
+    for department in departments:
+        default_panel = DepartmentPanel.query.filter_by(
+            department_id=department.id,
+            is_default=True,
+            active=True
+        ).first()
+        if not default_panel:
+            continue
+        try:
+            result = perform_sync_department_panel(department.id, default_panel.id, exact_match=True)
+            synced_panels += 1
+            print('[SYNC_API]', 'sync', department.name, result.get('removed_count'), result.get('added_count'))
+        except Exception as exc:
+            db.session.rollback()
+            sync_errors.append(f'{department.name}: {str(exc)}')
+            print('[SYNC_API]', 'sync error', department.name, str(exc))
+
+    return {
+        'synced_panels': synced_panels,
+        'sync_errors': sync_errors,
+    }
+
+
+def get_sync_status():
+    with app.app_context():
+        latest_job = ImportJob.query.order_by(ImportJob.created_at.desc()).first()
+
+    latest_job_data = None
+    if latest_job:
+        latest_job_data = {
+            'job_id': latest_job.id,
+            'source': latest_job.source,
+            'filename': latest_job.filename,
+            'total_lines': latest_job.total_lines,
+            'valid_count': latest_job.valid_count,
+            'quarantine_count': latest_job.quarantine_count,
+            'created_at': latest_job.created_at.isoformat() if latest_job.created_at else None,
+        }
+
+    return {
+        'enabled': True,
+        'upload_path': SYNC_UPLOAD_PATH,
+        'watched_filename': 'ITENSMGV.TXT',
+        'runtime': dict(SYNC_RUNTIME_STATUS),
+        'latest_job': latest_job_data,
+    }
+
+
+def process_uploaded_price_import(job_id, saved_path):
+    with app.app_context():
+        try:
+            SYNC_RUNTIME_STATUS.update({
+                'state': 'processing',
+                'last_job_id': job_id,
+                'last_error': None,
+            })
+            prepared = prepare_price_import(saved_path)
+            result = import_processed_butcher_data_inner(
+                prepared['items'],
+                prepared['official_code_map'],
+                job_id=job_id
+            )
+            sync_result = sync_default_department_panels_after_import()
+
+            job = ImportJob.query.get(job_id)
+            if job:
+                job.total_lines = prepared['total_lines']
+                job.valid_count = result.get('imported_count', 0)
+                job.quarantine_count = result.get('quarantine_count', 0)
+                db.session.commit()
+
+            app.logger.info(
+                'Importacao sincronizada concluida: job=%s imported=%s synced_panels=%s',
+                job_id,
+                result.get('imported_count', 0),
+                sync_result.get('synced_panels', 0)
+            )
+            SYNC_RUNTIME_STATUS.update({
+                'state': 'completed',
+                'last_job_id': job_id,
+                'last_completed_at': get_brazil_now().isoformat(),
+                'last_error': None,
+                'last_result': {
+                    'imported_count': result.get('imported_count', 0),
+                    'quarantine_count': result.get('quarantine_count', 0),
+                    'synced_panels': sync_result.get('synced_panels', 0),
+                    'sync_errors': sync_result.get('sync_errors', []),
+                    'errors': result.get('errors', []),
+                },
+            })
+        except Exception as exc:
+            db.session.rollback()
+            SYNC_RUNTIME_STATUS.update({
+                'state': 'failed',
+                'last_job_id': job_id,
+                'last_completed_at': get_brazil_now().isoformat(),
+                'last_error': str(exc),
+            })
+            app.logger.exception('Falha ao processar importacao sincronizada: job=%s erro=%s', job_id, exc)
+        finally:
+            try:
+                if os.path.exists(saved_path) and os.path.basename(saved_path) != 'ITENSMGV.TXT':
+                    os.remove(saved_path)
+            except Exception as cleanup_error:
+                app.logger.warning('Falha ao limpar snapshot de importacao: job=%s erro=%s', job_id, cleanup_error)
+
+
+def schedule_uploaded_price_import(saved_path, original_filename, stored_filename, source='sync_api'):
+    with app.app_context():
+        job = ImportJob(
+            source=source,
+            filename=original_filename or stored_filename or os.path.basename(saved_path),
+            total_lines=0,
+            valid_count=0,
+            quarantine_count=0
+        )
+        db.session.add(job)
+        db.session.commit()
+        job_id = job.id
+
+    SYNC_RUNTIME_STATUS.update({
+        'state': 'queued',
+        'last_job_id': job_id,
+        'last_filename': stored_filename,
+        'last_source': source,
+        'last_received_at': get_brazil_now().isoformat(),
+        'last_error': None,
+    })
+
+    processing_path = os.path.join(SYNC_UPLOAD_PATH, f'{job_id}_ITENSMGV.TXT')
+    shutil.copy2(saved_path, processing_path)
+
+    worker = threading.Thread(
+        target=process_uploaded_price_import,
+        args=(job_id, processing_path),
+        daemon=True,
+        name=f'price-sync-{job_id}'
+    )
+    worker.start()
+
+    return {
+        'job_id': job_id,
+        'status': 'queued'
+    }
+
+
+app.register_blueprint(
+    create_sync_blueprint(
+        schedule_import_callback=schedule_uploaded_price_import,
+        get_sync_token=lambda: os.environ.get('SYNC_TOKEN'),
+        get_upload_path=lambda: SYNC_UPLOAD_PATH,
+        get_status_callback=get_sync_status,
+    )
+)
 
 @app.route('/api/acougue/produtos/clear-all', methods=['DELETE'])
 def clear_all_butcher_products():

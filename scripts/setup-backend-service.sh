@@ -7,8 +7,8 @@ if command -v python3 >/dev/null 2>&1; then
 fi
 if [ -f requirements.txt ]; then pip3 install -r requirements.txt || pip install -r requirements.txt; fi
 if ! "$ROOT/BACKEND/.venv/bin/gunicorn" --version >/dev/null 2>&1; then pip install gunicorn || pip3 install gunicorn; fi
-mkdir -p uploads
-if command -v sudo >/dev/null 2>&1; then sudo chown -R www-data:www-data uploads || true; else chown -R www-data:www-data uploads || true; fi
+mkdir -p uploads importacoes
+if command -v sudo >/dev/null 2>&1; then sudo chown -R www-data:www-data uploads importacoes || true; else chown -R www-data:www-data uploads importacoes || true; fi
 TMP="$(mktemp)"
 cat > "$TMP" <<EOF
 [Unit]
@@ -18,6 +18,9 @@ After=network.target
 Type=simple
 WorkingDirectory=$ROOT/BACKEND
 Environment=PYTHONUNBUFFERED=1
+Environment=UPLOAD_PATH=$ROOT/BACKEND/importacoes
+Environment=SYNC_TOKEN=1gpQ7KwzmmLJeJr7nzC5LpkjSJCZMRhG25UpHNNnYX4LgjopdC6BGpEKulEH8HB-
+EnvironmentFile=-/etc/paineltv-backend.env
 ExecStart=$ROOT/BACKEND/.venv/bin/gunicorn -w 3 -b 127.0.0.1:5000 --timeout 300 --graceful-timeout 300 --worker-class gthread --threads 4 app:app
 Restart=always
 User=www-data
