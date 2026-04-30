@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ContainerLayout } from '../../components/layout/Layout';
 import { Button } from '../../components/base/Button';
 import { Card } from '../../components/base/Card';
 import { LoadingSkeleton } from '../../components/ui/LoadingSkeleton';
 import { StaggeredAnimation } from '../../components/ui/AnimatedPage';
 import { useDashboardStats } from '../../hooks/useDashboardStats';
+import { syncStatusService } from '../../services/syncStatusService';
+import type { SyncLogEntry } from '../../services/syncStatusService';
 import { 
   DollarSign, 
   Users, 
@@ -25,6 +27,26 @@ export default function HomePage() {
   const { stats, isLoading: statsLoading, hasError, refreshStats } = useDashboardStats();
   const [selectedPeriod, setSelectedPeriod] = useState('30d');
   const [isLoading, setIsLoading] = useState(false);
+  const [syncLoading, setSyncLoading] = useState(true);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [latestSync, setLatestSync] = useState<SyncLogEntry | null>(null);
+
+  useEffect(() => {
+    loadSyncStatus();
+  }, []);
+
+  const loadSyncStatus = async () => {
+    try {
+      setSyncLoading(true);
+      setSyncError(null);
+      const response = await syncStatusService.getStatus();
+      setLatestSync(response?.latest_sync || null);
+    } catch (error: any) {
+      setSyncError(error?.message || 'Erro ao carregar sincronização');
+    } finally {
+      setSyncLoading(false);
+    }
+  };
 
   const statsData = [
     {
@@ -232,6 +254,83 @@ export default function HomePage() {
             );
           })}
         </div>
+
+        <Card>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Sincronização de Preços
+              </h2>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                Última importação e departamentos impactados pela atualização
+              </p>
+            </div>
+            <Button variant="ghost" onClick={loadSyncStatus}>
+              Atualizar status
+            </Button>
+          </div>
+
+          {syncLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <LoadingSkeleton className="h-20" />
+              <LoadingSkeleton className="h-20" />
+              <LoadingSkeleton className="h-20" />
+            </div>
+          ) : syncError ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-300">
+              {syncError}
+            </div>
+          ) : latestSync ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="rounded-xl bg-gray-50 dark:bg-gray-700/40 p-4">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Última atualização</p>
+                  <p className="text-lg font-semibold text-gray-900 dark:text-white mt-1">
+                    {formatSyncDate(latestSync.data)}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-gray-50 dark:bg-gray-700/40 p-4">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Produtos atualizados</p>
+                  <p className="text-lg font-semibold text-gray-900 dark:text-white mt-1">
+                    {latestSync.produtos_atualizados}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-gray-50 dark:bg-gray-700/40 p-4">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Departamentos impactados</p>
+                  <p className="text-lg font-semibold text-gray-900 dark:text-white mt-1">
+                    {latestSync.departamentos.length}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                  Departamentos
+                </p>
+                {latestSync.departamentos.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {latestSync.departamentos.map((department) => (
+                      <span
+                        key={department}
+                        className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-sm font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                      >
+                        {department}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Nenhum departamento identificado na última sincronização.
+                  </p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Nenhum histórico de sincronização disponível.
+            </p>
+          )}
+        </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Quick Actions */}
@@ -455,4 +554,25 @@ export default function HomePage() {
       </div>
     </ContainerLayout>
   );
+}
+
+function formatSyncDate(value?: string) {
+  if (!value) {
+    return 'Nao disponivel';
+  }
+
+  const normalized = value.includes('T') ? value : value.replace(' ', 'T');
+  const date = new Date(normalized);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }

@@ -10,13 +10,16 @@ from datetime import datetime, timedelta
 import uuid
 import pytz
 import re
+import json
 import jwt
 import threading
 import time
 import shutil
 from sqlalchemy import text
 from routes.sync import create_sync_blueprint
+from routes.sync_status import create_sync_status_blueprint
 from services.price_sync_service import ensure_directory, prepare_price_import
+from services.sync_logger import ensure_sync_log_table, get_latest_sync_log, get_sync_log_history, record_sync_log
 
 app = Flask(__name__)
 
@@ -32,6 +35,7 @@ CORS(app,
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 INSTANCE_DIR = os.path.join(BASE_DIR, 'instance')
 os.makedirs(INSTANCE_DIR, exist_ok=True)
+LOCAL_DB_PATH = os.path.join(INSTANCE_DIR, 'paineltv.db')
 SYNC_UPLOAD_PATH = os.environ.get('UPLOAD_PATH') or os.path.join(BASE_DIR, 'importacoes')
 ensure_directory(SYNC_UPLOAD_PATH)
 SYNC_RUNTIME_STATUS = {
@@ -51,7 +55,7 @@ DATABASE_URL = os.environ.get('DATABASE_URL')
 if DATABASE_URL and 'postgres' in DATABASE_URL:
     print("[INFO] Ignorando DATABASE_URL PostgreSQL, usando SQLite local")
     
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(INSTANCE_DIR, 'paineltv.db')}"
+app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{LOCAL_DB_PATH}"
 print(f"[INFO] Usando SQLite: {app.config['SQLALCHEMY_DATABASE_URI']}")
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'uploads')
@@ -1903,6 +1907,16 @@ def import_processed_butcher_data():
             db.session.commit()
         except Exception:
             db.session.rollback()
+        if not preview:
+            sync_log_entry = record_sync_log(
+                LOCAL_DB_PATH,
+                total_products=res.get('updated_products_count', 0),
+                product_names=res.get('affected_product_names', []),
+                source='api',
+                job_id=job.id,
+                occurred_at=get_brazil_now().replace(tzinfo=None),
+            )
+            res['sync_log'] = sync_log_entry
         return jsonify(res)
     
     except Exception as e:
@@ -1961,6 +1975,14 @@ def import_from_txt_path():
             code, _ = c.most_common(1)[0]
             official_code_map[n] = code
         res = import_processed_butcher_data_inner(produtos, official_code_map)
+        sync_log_entry = record_sync_log(
+            LOCAL_DB_PATH,
+            total_products=res.get('updated_products_count', 0),
+            product_names=res.get('affected_product_names', []),
+            source='txt_path',
+            occurred_at=get_brazil_now().replace(tzinfo=None),
+        )
+        res['sync_log'] = sync_log_entry
         return jsonify(res)
     except Exception as e:
         return jsonify({'error': str(e)}), 400
@@ -1968,6 +1990,8 @@ def import_from_txt_path():
 def import_processed_butcher_data_inner(produtos_data, official_code_map=None, preview=False, job_id=None, price_delta_limit_pct=None, name_similarity_min=None):
     errors = []
     success_count = 0
+    updated_product_names = []
+    updated_product_keys = set()
     from decimal import Decimal
     import unicodedata, re
     def _norm(s: str):
@@ -2087,6 +2111,10 @@ def import_processed_butcher_data_inner(produtos_data, official_code_map=None, p
                             )
                             db.session.add(ph)
                             existing.preco = preco_decimal
+                            product_key = f'{codigo}:{norm_name}'
+                            if product_key not in updated_product_keys:
+                                updated_product_keys.add(product_key)
+                                updated_product_names.append(nome)
                 except Exception as e:
                     print(f"Erro ao comparar preços: {e}")
                 
@@ -2108,6 +2136,10 @@ def import_processed_butcher_data_inner(produtos_data, official_code_map=None, p
                         codigo = existing_by_code[codigo].codigo
                     product = ButcherProduct(codigo=codigo, nome=nome, preco=preco_decimal, posicao=posicao_disponivel, ativo=ativo)
                     db.session.add(product)
+                    product_key = f'{codigo}:{norm_name}'
+                    if product_key not in updated_product_keys:
+                        updated_product_keys.add(product_key)
+                        updated_product_names.append(nome)
             success_count += 1
         except Exception as e:
             errors.append(f"Erro ao importar produto {item.get('nome', 'desconhecido')}: {str(e)}")
@@ -2118,7 +2150,14 @@ def import_processed_butcher_data_inner(produtos_data, official_code_map=None, p
             db.session.rollback()
             errors.append(f"Erro ao salvar importação: {str(e)}")
             success_count = 0
-    return {'imported_count': success_count, 'errors': errors, 'quarantine_count': quarantine_count, 'preview': preview}
+    return {
+        'imported_count': success_count,
+        'errors': errors,
+        'quarantine_count': quarantine_count,
+        'preview': preview,
+        'updated_products_count': len(updated_product_names),
+        'affected_product_names': updated_product_names,
+    }
 
 def _norm_name(s):
     import unicodedata, re
@@ -2227,6 +2266,17 @@ def start_toledo_monitor(path, interval_minutes):
                             except Exception as _e:
                                 db.session.rollback()
                                 print('[MONITOR]', 'sync error', str(_e))
+                            try:
+                                sync_log_entry = record_sync_log(
+                                    LOCAL_DB_PATH,
+                                    total_products=res.get('updated_products_count', 0),
+                                    product_names=res.get('affected_product_names', []),
+                                    source='monitor',
+                                    occurred_at=get_brazil_now().replace(tzinfo=None),
+                                )
+                                print('[MONITOR]', 'sync log', sync_log_entry.get('produtos_atualizados'), sync_log_entry.get('departamentos'))
+                            except Exception as _e:
+                                print('[MONITOR]', 'sync log error', str(_e))
                         print('[MONITOR]', path, 'imported', res.get('imported_count'))
                         last_mtime = mtime
             except Exception as e:
@@ -2275,7 +2325,7 @@ def sync_default_department_panels_after_import():
     }
 
 
-def get_sync_status():
+def get_sync_status(limit_history=10):
     with app.app_context():
         latest_job = ImportJob.query.order_by(ImportJob.created_at.desc()).first()
 
@@ -2291,12 +2341,17 @@ def get_sync_status():
             'created_at': latest_job.created_at.isoformat() if latest_job.created_at else None,
         }
 
+    latest_sync = get_latest_sync_log(LOCAL_DB_PATH)
+    history = get_sync_log_history(LOCAL_DB_PATH, limit=limit_history)
+
     return {
         'enabled': True,
         'upload_path': SYNC_UPLOAD_PATH,
         'watched_filename': 'ITENSMGV.TXT',
         'runtime': dict(SYNC_RUNTIME_STATUS),
         'latest_job': latest_job_data,
+        'latest_sync': latest_sync,
+        'history': history,
     }
 
 
@@ -2317,6 +2372,14 @@ def process_uploaded_price_import(job_id, saved_path):
             sync_result = sync_default_department_panels_after_import()
 
             job = ImportJob.query.get(job_id)
+            sync_log_entry = record_sync_log(
+                LOCAL_DB_PATH,
+                total_products=result.get('updated_products_count', 0),
+                product_names=result.get('affected_product_names', []),
+                source=job.source if job else 'sync_api',
+                job_id=job_id,
+                occurred_at=get_brazil_now().replace(tzinfo=None),
+            )
             if job:
                 job.total_lines = prepared['total_lines']
                 job.valid_count = result.get('imported_count', 0)
@@ -2339,6 +2402,9 @@ def process_uploaded_price_import(job_id, saved_path):
                     'quarantine_count': result.get('quarantine_count', 0),
                     'synced_panels': sync_result.get('synced_panels', 0),
                     'sync_errors': sync_result.get('sync_errors', []),
+                    'updated_products_count': result.get('updated_products_count', 0),
+                    'departments': sync_log_entry.get('departamentos', []),
+                    'sync_log': sync_log_entry,
                     'errors': result.get('errors', []),
                 },
             })
@@ -2404,6 +2470,12 @@ app.register_blueprint(
         get_sync_token=lambda: os.environ.get('SYNC_TOKEN'),
         get_upload_path=lambda: SYNC_UPLOAD_PATH,
         get_status_callback=get_sync_status,
+    )
+)
+
+app.register_blueprint(
+    create_sync_status_blueprint(
+        get_sync_status_callback=get_sync_status,
     )
 )
 
@@ -3518,6 +3590,7 @@ def ensure_db_initialized():
         db.create_all()
         try:
             ensure_department_color_columns()
+            ensure_sync_log_table(LOCAL_DB_PATH)
             create_admin_user()
             create_default_departments()
         except Exception:
@@ -3600,6 +3673,7 @@ if __name__ == '__main__':
     with app.app_context():
         db.create_all()
         ensure_department_color_columns()
+        ensure_sync_log_table(LOCAL_DB_PATH)
         create_admin_user()
         create_default_departments()
         try:
