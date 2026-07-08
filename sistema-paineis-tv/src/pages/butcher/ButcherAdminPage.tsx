@@ -906,3 +906,5 @@ export const ButcherAdminPage: React.FC = () => {
     </ContainerLayout>
   );
 };
+
+export default ButcherAdminPage;

@@ -62,7 +62,13 @@ class SyncAgent:
         logger.setLevel(logging.INFO)
         logger.handlers.clear()
 
-        file_handler = logging.FileHandler(self.logs_dir / "sync.log", encoding="utf-8")
+        from logging.handlers import RotatingFileHandler
+        file_handler = RotatingFileHandler(
+            self.logs_dir / "sync.log",
+            maxBytes=5 * 1024 * 1024,
+            backupCount=3,
+            encoding="utf-8"
+        )
         formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)

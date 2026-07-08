@@ -12,10 +12,10 @@ const LazyWrapper = ({ children }: { children: React.ReactNode }) => (
 
 // Lazy loading das páginas principais
 const HomePage = lazy(() => import('../pages/home/page'));
-const PaineisPage = lazy(() => import('../pages/paineis/page'));
-const AcoesPage = lazy(() => import('../pages/acoes/page'));
+const PaineisPage = lazy(() => import('../pages/panels/PanelsPage'));
+const AcoesPage = lazy(() => import('../pages/actions/ActionsPage'));
 const UsuariosPage = lazy(() => import('../pages/usuarios/page'));
-const AcougueAdminPage = lazy(() => import('../pages/acougue-admin/page'));
+const AcougueAdminPage = lazy(() => import('../pages/butcher/ButcherAdminPage'));
 const DepartamentosPage = lazy(() => import('../pages/departamentos/page'));
 const ProfilePage = lazy(() => import('../pages/profile/page'));
 const SettingsPage = lazy(() => import('../pages/settings/page'));

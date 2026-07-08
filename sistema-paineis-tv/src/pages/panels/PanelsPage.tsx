@@ -621,3 +621,5 @@ export const PanelsPage: React.FC = () => {
     </ContainerLayout>
   );
 };
+
+export default PanelsPage;

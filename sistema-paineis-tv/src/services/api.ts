@@ -63,6 +63,8 @@ async function apiRequest<T>(
     console.log('📡 API Response:', { status: response.status, statusText: response.statusText, url });
     
     // PRIMEIRO: Verificar status 204 (No Content) antes de qualquer outra operação
+
+
     if (response.status === 204) {
       console.log('✅ API: Status 204 - No Content');
       return null as T;
@@ -81,6 +83,13 @@ async function apiRequest<T>(
         }
       } catch {
         // Ignorar erros de parsing para mensagens de erro
+      }
+      
+      if (response.status === 401) {
+        // Token inválido, fazer logout automático
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
       }
       
       throw new ApiError(
@@ -183,22 +192,6 @@ export const api = {
       skipDefaultHeaders: true,
     });
   },
-};
-
-// Interceptor para logout automático em caso de token inválido
-const originalRequest = api.get;
-api.get = async <T>(endpoint: string) => {
-  try {
-    return await originalRequest<T>(endpoint);
-  } catch (error) {
-    if (error instanceof ApiError && error.status === 401) {
-      // Token inválido, fazer logout
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
-    }
-    throw error;
-  }
 };
 
 export default api;

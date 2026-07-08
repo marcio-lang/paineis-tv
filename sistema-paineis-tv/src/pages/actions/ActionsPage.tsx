@@ -934,3 +934,5 @@ export const ActionsPage: React.FC = () => {
     </ContainerLayout>
   );
 };
+
+export default ActionsPage;

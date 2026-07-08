@@ -244,6 +244,8 @@ class ImportJob(db.Model):
     total_lines = db.Column(db.Integer)
     valid_count = db.Column(db.Integer)
     quarantine_count = db.Column(db.Integer)
+    status = db.Column(db.String(20), default='queued')
+    error = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=get_brazil_now)
 
 class ImportLine(db.Model):
@@ -2330,6 +2332,18 @@ def get_sync_status(limit_history=10):
         latest_job = ImportJob.query.order_by(ImportJob.created_at.desc()).first()
 
     latest_job_data = None
+    runtime_status = {
+        'enabled': True,
+        'state': 'idle',
+        'last_job_id': None,
+        'last_filename': None,
+        'last_source': None,
+        'last_received_at': None,
+        'last_completed_at': None,
+        'last_error': None,
+        'last_result': None,
+    }
+
     if latest_job:
         latest_job_data = {
             'job_id': latest_job.id,
@@ -2340,6 +2354,17 @@ def get_sync_status(limit_history=10):
             'quarantine_count': latest_job.quarantine_count,
             'created_at': latest_job.created_at.isoformat() if latest_job.created_at else None,
         }
+        
+        runtime_status.update({
+            'state': latest_job.status or 'idle',
+            'last_job_id': latest_job.id,
+            'last_filename': latest_job.filename,
+            'last_source': latest_job.source,
+            'last_received_at': latest_job.created_at.isoformat() if latest_job.created_at else None,
+            'last_error': latest_job.error,
+        })
+        if latest_job.status in ('completed', 'failed'):
+            runtime_status['last_completed_at'] = latest_job.created_at.isoformat() if latest_job.created_at else None
 
     latest_sync = get_latest_sync_log(LOCAL_DB_PATH)
     history = get_sync_log_history(LOCAL_DB_PATH, limit=limit_history)
@@ -2348,7 +2373,7 @@ def get_sync_status(limit_history=10):
         'enabled': True,
         'upload_path': SYNC_UPLOAD_PATH,
         'watched_filename': 'ITENSMGV.TXT',
-        'runtime': dict(SYNC_RUNTIME_STATUS),
+        'runtime': runtime_status,
         'latest_job': latest_job_data,
         'latest_sync': latest_sync,
         'history': history,
@@ -2358,6 +2383,11 @@ def get_sync_status(limit_history=10):
 def process_uploaded_price_import(job_id, saved_path):
     with app.app_context():
         try:
+            job = ImportJob.query.get(job_id)
+            if job:
+                job.status = 'processing'
+                db.session.commit()
+
             SYNC_RUNTIME_STATUS.update({
                 'state': 'processing',
                 'last_job_id': job_id,
@@ -2381,6 +2411,7 @@ def process_uploaded_price_import(job_id, saved_path):
                 occurred_at=get_brazil_now().replace(tzinfo=None),
             )
             if job:
+                job.status = 'completed'
                 job.total_lines = prepared['total_lines']
                 job.valid_count = result.get('imported_count', 0)
                 job.quarantine_count = result.get('quarantine_count', 0)
@@ -2410,6 +2441,15 @@ def process_uploaded_price_import(job_id, saved_path):
             })
         except Exception as exc:
             db.session.rollback()
+            try:
+                job = ImportJob.query.get(job_id)
+                if job:
+                    job.status = 'failed'
+                    job.error = str(exc)
+                    db.session.commit()
+            except Exception as db_exc:
+                app.logger.error('Falha ao registrar falha de importacao no banco: %s', db_exc)
+
             SYNC_RUNTIME_STATUS.update({
                 'state': 'failed',
                 'last_job_id': job_id,
