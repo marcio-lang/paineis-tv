@@ -3625,11 +3625,42 @@ def ensure_department_color_columns():
         except Exception:
             pass
 
+def ensure_import_job_status_columns():
+    import sqlite3
+
+    try:
+        conn = sqlite3.connect(LOCAL_DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(import_job)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if not columns:
+            return
+        modified = False
+        if 'status' not in columns:
+            cursor.execute("ALTER TABLE import_job ADD COLUMN status VARCHAR(20) DEFAULT 'completed'")
+            modified = True
+        if 'error' not in columns:
+            cursor.execute("ALTER TABLE import_job ADD COLUMN error TEXT")
+            modified = True
+        if modified:
+            conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
 def ensure_db_initialized():
     with app.app_context():
         db.create_all()
         try:
             ensure_department_color_columns()
+            ensure_import_job_status_columns()
             ensure_sync_log_table(LOCAL_DB_PATH)
             create_admin_user()
             create_default_departments()

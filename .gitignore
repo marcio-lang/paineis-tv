@@ -25,3 +25,5 @@ __pycache__/
 
 agente-local/logs/
 agente-local/pendentes/
+
+.dbg/
